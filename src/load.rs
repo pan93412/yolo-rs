@@ -129,9 +129,9 @@ impl YoloModelSession {
     /// [Ultralytics' manual](https://docs.ultralytics.com/integrations/onnx/).
     pub fn from_filename_v8(filename: impl AsRef<Path>) -> Result<Self, YoloError> {
         let session = ort::session::Session::builder()
-            .map_err(|e| YoloError::OrtSessionBuildError(e))?
+            .map_err(YoloError::OrtSessionBuildError)?
             .commit_from_file(filename)
-            .map_err(|e| YoloError::OrtSessionLoadError(e))?;
+            .map_err(YoloError::OrtSessionLoadError)?;
 
         Ok(Self::new_v8(session))
     }

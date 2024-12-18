@@ -129,7 +129,7 @@ pub fn inference(model: &YoloModelSession, YoloInputView { tensor_view, raw_widt
 	// Turn the output tensor into bounding boxes
 	let boxes = output
 		.axis_iter(Axis(0))
-		.map(|row| {
+		.filter_map(|row| {
 			let (class_id, prob) = row
 				.iter()
 				.skip(4)  // skip bounding box coordinates
@@ -156,7 +156,6 @@ pub fn inference(model: &YoloModelSession, YoloInputView { tensor_view, raw_widt
 				confidence: prob
 			})
 		})
-		.filter_map(|x| x)
 		.collect::<Vec<YoloEntityOutput>>();
 
 	// Perform non-maximum suppression
