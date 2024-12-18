@@ -1,0 +1,15 @@
+[package]
+name = "example-yolo-gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.94"
+clap = { version = "4.5.23", features = ["derive"] }
+image = "0.25.5"
+ort = { version = "2.0.0-rc.9", features = ["coreml"] }
+raqote = { version = "0.8.5", default-features = false }
+show-image = { version = "0.14.0", features = ["image", "raqote"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+yolo-rs = { version = "0.1.0", path = "../.." }

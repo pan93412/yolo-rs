@@ -16,3 +16,8 @@ image = "0.25.5"
 ndarray = "0.16.1"
 ort = "2.0.0-rc.9"
 thiserror = "2.0.8"
+
+[workspace]
+members = [
+	'examples/yolo-cli',
+]
