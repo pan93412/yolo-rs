@@ -7,7 +7,7 @@ categories = ["science"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/pan93412/yolo-v11-rs"
+repository = "https://github.com/pan93412/yolo-rs"
 readme = "README.md"
 
 [dependencies]
