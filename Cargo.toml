@@ -2,7 +2,7 @@
 name = "yolo-rs"
 description = "YOLO object detection model in Rust. Currently on YOLO v11."
 authors = ["Yi-Jyun Pan <pan93412@gmail.com>"]
-keywords = ["yolo", "object detection", "onnx", "rust", "machine learning"]
+keywords = ["yolo", "object-detection", "onnx", "rust", "machine-learning"]
 categories = ["science"]
 version = "0.1.0"
 edition = "2024"
