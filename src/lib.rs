@@ -48,7 +48,12 @@ pub struct YoloInputView<'a> {
 #[derive(Debug, Clone)]
 pub struct YoloEntityOutput {
     pub bounding_box: BoundingBox,
+    /// The label of the detected entity.
+    ///
+    /// You can check the metadata of the model with
+    /// [Netron](https://netron.app) to get the labels.
     pub label: ArcStr,
+    /// The confidence of the detected entity.
     pub confidence: f32,
 }
 
@@ -82,7 +87,7 @@ pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
 /// Inference on the YOLO model, returning the detected entities.
 ///
 /// The input tensor should be obtained from the [`image_to_yolo_input_tensor`] function.
-/// The [`YoloModelSession`] can be obtained from the [`load::YoloModelSession::from_filename_v8`] method.
+/// The [`YoloModelSession`] can be obtained from the [`YoloModelSession::from_filename_v8`] method.
 pub fn inference(
     model: &YoloModelSession,
     YoloInputView {
@@ -101,8 +106,9 @@ pub fn inference(
             - intersection(box1, box2)
     }
 
-    fn non_maximum_suppression_optimized(
+    fn non_maximum_suppression(
         mut boxes: Vec<YoloEntityOutput>,
+        iou_threshold: f32,
     ) -> Vec<YoloEntityOutput> {
         // Early return if no boxes are provided
         if boxes.is_empty() {
@@ -121,7 +127,7 @@ pub fn inference(
             if result.iter().all(|selected: &YoloEntityOutput| {
                 let iou = intersection(&selected.bounding_box, &current.bounding_box)
                     / union(&selected.bounding_box, &current.bounding_box);
-                iou < 0.7
+                iou < iou_threshold
             }) {
                 result.push(current);
             }
@@ -154,7 +160,7 @@ pub fn inference(
                 .enumerate()
                 .map(|(index, value)| (index, *value))
                 .reduce(|accum, row| if row.1 > accum.1 { row } else { accum })
-                .filter(|(_, prob)| *prob >= 0.5)?;
+                .filter(|(_, prob)| *prob >= model.get_probability_threshold())?;
 
             let label = model.labels[class_id].clone();
 
@@ -176,6 +182,6 @@ pub fn inference(
         })
         .collect::<Vec<YoloEntityOutput>>();
 
-    // Perform non-maximum suppression
-    Ok(non_maximum_suppression_optimized(boxes))
+    // Perform non-maximum suppression (NMS)
+    Ok(non_maximum_suppression(boxes, model.get_iou_threshold()))
 }

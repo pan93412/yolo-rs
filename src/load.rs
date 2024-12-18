@@ -13,6 +13,9 @@ use crate::error::YoloError;
 pub struct YoloModelSession {
     pub session: ort::session::Session,
     pub labels: Vec<ArcStr>,
+
+    pub probability_threshold: Option<f32>, // default = 0.5
+    pub iou_threshold: Option<f32>,         // default = 0.7
 }
 
 impl YoloModelSession {
@@ -26,6 +29,8 @@ impl YoloModelSession {
         Self {
             session,
             labels: labels.map(Into::into).collect(),
+            probability_threshold: None,
+            iou_threshold: None,
         }
     }
 
@@ -117,6 +122,8 @@ impl YoloModelSession {
         Self {
             session,
             labels: LABELS.to_vec(),
+            probability_threshold: None,
+            iou_threshold: None,
         }
     }
 
@@ -134,6 +141,18 @@ impl YoloModelSession {
             .map_err(YoloError::OrtSessionLoadError)?;
 
         Ok(Self::new_v8(session))
+    }
+
+    pub fn get_labels(&self) -> &[ArcStr] {
+        &self.labels
+    }
+
+    pub fn get_probability_threshold(&self) -> f32 {
+        self.probability_threshold.unwrap_or(0.5)
+    }
+
+    pub fn get_iou_threshold(&self) -> f32 {
+        self.iou_threshold.unwrap_or(0.7)
     }
 }
 
