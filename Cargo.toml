@@ -1,0 +1,18 @@
+[package]
+name = "yolo-rs"
+description = "YOLO object detection model in Rust. Currently on YOLO v11."
+authors = ["Yi-Jyun Pan <pan93412@gmail.com>"]
+keywords = ["yolo", "object detection", "onnx", "rust", "machine learning"]
+categories = ["science"]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pan93412/yolo-v11-rs"
+readme = "README.md"
+
+[dependencies]
+arcstr = "1.2.0"
+image = "0.25.5"
+ndarray = "0.16.1"
+ort = "2.0.0-rc.9"
+thiserror = "2.0.8"
