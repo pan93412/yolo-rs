@@ -4,12 +4,12 @@
 //! Currently, it supports only the inference.
 
 pub mod error;
-pub mod load;
+pub mod model;
 
 use arcstr::ArcStr;
 use error::YoloError;
 use image::{DynamicImage, GenericImageView, Rgba, imageops::FilterType};
-use load::YoloModelSession;
+use model::YoloModelSession;
 use ndarray::{Array4, ArrayBase, ArrayView4, Axis, s};
 use ort::inputs;
 
