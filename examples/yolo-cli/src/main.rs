@@ -34,11 +34,11 @@ fn main() -> Result<()> {
         ])
         .commit()?;
 
-    tracing::info!("Loading image {}…", args.picture_path.display());
+    tracing::info!("Loading image {:?}…", args.picture_path.display());
     let original_img = image::open(&args.picture_path)
         .with_context(|| format!("failed to open image {:?}", args.picture_path.display()))?;
 
-    tracing::info!("Loading models {}…", args.model_path.display());
+    tracing::info!("Loading models {:?}…", args.model_path.display());
     let model = {
         let mut model = model::YoloModelSession::from_filename_v8(&args.model_path)
             .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
@@ -54,7 +54,10 @@ fn main() -> Result<()> {
 
     // Run YOLOv8 inference
     tracing::info!("Running inference…");
+
+    let now = std::time::Instant::now();
     let result = inference(&model, input.view())?;
+    tracing::info!("Inference took {:?}", now.elapsed());
 
     tracing::debug!("Drawing bounding boxes…");
     let (img_width, img_height) = (original_img.width(), original_img.height());
