@@ -40,6 +40,8 @@
   '';
 
   # https://devenv.sh/pre-commit-hooks/
+  git-hooks.hooks.clippy.enable = true;
+  git-hooks.hooks.rustfmt.enable = true;
   # pre-commit.hooks.shellcheck.enable = true;
 
   # See full reference at https://devenv.sh/reference/options/
