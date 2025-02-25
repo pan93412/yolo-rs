@@ -5,6 +5,7 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -49,5 +50,7 @@ jobs:
       run: nix profile install nixpkgs#devenv
 
     - name: Build
-      working-directory: examples/yolo-cli
-      run: devenv shell cargo build --verbose
+      shell: devenv shell bash -- -e {0}
+      run: |
+        cd examples/yolo-cli
+        cargo build --verbose
