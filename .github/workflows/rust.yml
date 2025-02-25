@@ -10,8 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  build-library:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +22,7 @@ jobs:
       with:
         name: devenv
         extraPullNames: nix-community
-  
+
     - name: Install devenv.sh
       run: nix profile install nixpkgs#devenv
 
@@ -32,3 +31,23 @@ jobs:
 
     - name: Run tests
       run: devenv shell cargo test --verbose
+
+  build-examples:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # install nix
+    - uses: cachix/install-nix-action@v30
+    - uses: cachix/cachix-action@v15
+      with:
+        name: devenv
+        extraPullNames: nix-community
+
+    - name: Install devenv.sh
+      run: nix profile install nixpkgs#devenv
+
+    - name: Build
+      working-directory: examples/yolo-cli
+      run: devenv shell cargo build --verbose
