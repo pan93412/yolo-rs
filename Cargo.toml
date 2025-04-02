@@ -9,6 +9,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/pan93412/yolo-rs"
 readme = "README.md"
+exclude = [".github", "examples", ".envrc", "devenv*"]
 
 [dependencies]
 arcstr = "1.2.0"
