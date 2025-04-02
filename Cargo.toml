@@ -12,10 +12,10 @@ readme = "README.md"
 
 [dependencies]
 arcstr = "1.2.0"
-image = "0.25.5"
+image = "0.25.6"
 ndarray = "0.16.1"
 ort = "2.0.0-rc.9"
-thiserror = "2.0.11"
+thiserror = "2.0.12"
 
 [workspace]
 members = [
