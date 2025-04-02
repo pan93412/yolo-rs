@@ -18,8 +18,8 @@ jobs:
     - uses: actions/checkout@v4
 
     # install nix
-    - uses: cachix/install-nix-action@v30
-    - uses: cachix/cachix-action@v15
+    - uses: cachix/install-nix-action@v31
+    - uses: cachix/cachix-action@v16
       with:
         name: devenv
         extraPullNames: nix-community
@@ -40,8 +40,8 @@ jobs:
     - uses: actions/checkout@v4
 
     # install nix
-    - uses: cachix/install-nix-action@v30
-    - uses: cachix/cachix-action@v15
+    - uses: cachix/install-nix-action@v31
+    - uses: cachix/cachix-action@v16
       with:
         name: devenv
         extraPullNames: nix-community
