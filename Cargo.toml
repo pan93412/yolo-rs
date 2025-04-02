@@ -4,18 +4,19 @@ description = "YOLO object detection model in Rust. Currently on YOLO v11."
 authors = ["Yi-Jyun Pan <pan93412@gmail.com>"]
 keywords = ["yolo", "object-detection", "onnx", "rust", "machine-learning"]
 categories = ["science"]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/pan93412/yolo-rs"
 readme = "README.md"
+exclude = [".github", "examples", ".envrc", "devenv*"]
 
 [dependencies]
 arcstr = "1.2.0"
-image = "0.25.5"
+image = "0.25.6"
 ndarray = "0.16.1"
 ort = "2.0.0-rc.9"
-thiserror = "2.0.11"
+thiserror = "2.0.12"
 
 [workspace]
 members = [
