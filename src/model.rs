@@ -161,3 +161,9 @@ impl AsRef<ort::session::Session> for YoloModelSession {
         &self.session
     }
 }
+
+impl AsMut<ort::session::Session> for YoloModelSession {
+    fn as_mut(&mut self) -> &mut ort::session::Session {
+        &mut self.session
+    }
+}

@@ -39,7 +39,7 @@ fn main() -> Result<()> {
         .with_context(|| format!("failed to open image {:?}", args.picture_path.display()))?;
 
     tracing::info!("Loading models {:?}…", args.model_path.display());
-    let model = {
+    let mut model = {
         let mut model = model::YoloModelSession::from_filename_v8(&args.model_path)
             .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
 
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
     tracing::info!("Running inference…");
 
     let now = std::time::Instant::now();
-    let result = inference(&model, input.view())?;
+    let result = inference(&mut model, input.view())?;
     tracing::info!("Inference took {:?}", now.elapsed());
 
     tracing::debug!("Drawing bounding boxes…");
@@ -121,10 +121,13 @@ fn main() -> Result<()> {
     let window = show_image::context()
         .run_function_wait(move |context| -> Result<_, String> {
             let mut window = context
-                .create_window("ort + YOLOv8", WindowOptions {
-                    size: Some([img_width, img_height]),
-                    ..WindowOptions::default()
-                })
+                .create_window(
+                    "ort + YOLOv8",
+                    WindowOptions {
+                        size: Some([img_width, img_height]),
+                        ..WindowOptions::default()
+                    },
+                )
                 .map_err(|e| e.to_string())?;
             window.set_image(
                 "baseball",
