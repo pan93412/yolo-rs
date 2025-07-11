@@ -1,0 +1,57 @@
+name: Rust Style
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/checkout@v4
+    - uses: DeterminateSystems/flake-checker-action@main
+      with:
+        fail-mode: true
+    - uses: DeterminateSystems/determinate-nix-action@main
+    - uses: DeterminateSystems/flakehub-cache-action@main
+
+    - name: Check formatting
+      run: nix develop --command cargo fmt --check
+
+  rust-clippy-library:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/checkout@v4
+    - uses: DeterminateSystems/flake-checker-action@main
+    - uses: DeterminateSystems/determinate-nix-action@main
+    - uses: DeterminateSystems/flakehub-cache-action@main
+
+    - name: Check formatting
+      run: nix develop --command cargo clippy --all-targets --all-features -- --deny warnings
+
+  rust-clippy-examples:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/checkout@v4
+    - uses: DeterminateSystems/flake-checker-action@main
+    - uses: DeterminateSystems/determinate-nix-action@main
+    - uses: DeterminateSystems/flakehub-cache-action@main
+
+    - name: Check formatting
+      working-directory: examples/yolo-cli
+      run: nix develop --command cargo clippy --all-targets --all-features -- --deny warnings
