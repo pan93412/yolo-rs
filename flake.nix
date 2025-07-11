@@ -64,6 +64,8 @@
               cargo-edit
               cargo-watch
               rust-analyzer
+
+              nixfmt-rfc-style
             ];
 
             env = {
