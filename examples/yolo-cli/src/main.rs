@@ -121,10 +121,13 @@ fn main() -> Result<()> {
     let window = show_image::context()
         .run_function_wait(move |context| -> Result<_, String> {
             let mut window = context
-                .create_window("ort + YOLOv8", WindowOptions {
-                    size: Some([img_width, img_height]),
-                    ..WindowOptions::default()
-                })
+                .create_window(
+                    "ort + YOLOv8",
+                    WindowOptions {
+                        size: Some([img_width, img_height]),
+                        ..WindowOptions::default()
+                    },
+                )
                 .map_err(|e| e.to_string())?;
             window.set_image(
                 "baseball",
