@@ -39,7 +39,7 @@ fn main() -> Result<()> {
         .with_context(|| format!("failed to open image {:?}", args.picture_path.display()))?;
 
     tracing::info!("Loading models {:?}…", args.model_path.display());
-    let model = {
+    let mut model = {
         let mut model = model::YoloModelSession::from_filename_v8(&args.model_path)
             .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
 
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
     tracing::info!("Running inference…");
 
     let now = std::time::Instant::now();
-    let result = inference(&model, input.view())?;
+    let result = inference(&mut model, input.view())?;
     tracing::info!("Inference took {:?}", now.elapsed());
 
     tracing::debug!("Drawing bounding boxes…");

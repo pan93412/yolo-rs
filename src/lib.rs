@@ -11,7 +11,7 @@ use error::YoloError;
 use image::{DynamicImage, GenericImageView, Rgba, imageops::FilterType};
 use model::YoloModelSession;
 use ndarray::{Array4, ArrayBase, ArrayView4, Axis, s};
-use ort::inputs;
+use ort::{inputs, value::TensorRef};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BoundingBox {
@@ -89,7 +89,7 @@ pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
 /// The input tensor should be obtained from the [`image_to_yolo_input_tensor`] function.
 /// The [`YoloModelSession`] can be obtained from the [`YoloModelSession::from_filename_v8`] method.
 pub fn inference(
-    model: &YoloModelSession,
+    model: &mut YoloModelSession,
     YoloInputView {
         tensor_view,
         raw_width,
@@ -138,14 +138,20 @@ pub fn inference(
         result
     }
 
+    // Due to the lifetime of the model, we need to clone the
+    // labels and thresholds early.
+    let iou_threshold = model.get_iou_threshold();
+    let probability_threshold = model.get_probability_threshold();
+    let labels = model.get_labels().to_vec();
+
     // Run YOLOv8 inference
-    let inputs = inputs!["images" => tensor_view].map_err(YoloError::OrtInputError)?;
+    let inputs = inputs!["images" => TensorRef::from_array_view(tensor_view).map_err(YoloError::OrtInputError)?];
     let outputs = model
-        .as_ref()
+        .as_mut()
         .run(inputs)
         .map_err(YoloError::OrtInferenceError)?;
     let output = outputs["output0"]
-        .try_extract_tensor::<f32>()
+        .try_extract_array::<f32>()
         .map_err(YoloError::OrtExtractSensorError)?
         .reversed_axes();
     let output = output.slice(s![.., .., 0]);
@@ -160,9 +166,9 @@ pub fn inference(
                 .enumerate()
                 .map(|(index, value)| (index, *value))
                 .reduce(|accum, row| if row.1 > accum.1 { row } else { accum })
-                .filter(|(_, prob)| *prob >= model.get_probability_threshold())?;
+                .filter(|(_, prob)| *prob >= probability_threshold)?;
 
-            let label = model.labels[class_id].clone();
+            let label = labels[class_id].clone();
 
             let xc = row[0_usize] / 640. * (raw_width as f32);
             let yc = row[1_usize] / 640. * (raw_height as f32);
@@ -183,5 +189,5 @@ pub fn inference(
         .collect::<Vec<YoloEntityOutput>>();
 
     // Perform non-maximum suppression (NMS)
-    Ok(non_maximum_suppression(boxes, model.get_iou_threshold()))
+    Ok(non_maximum_suppression(boxes, iou_threshold))
 }
