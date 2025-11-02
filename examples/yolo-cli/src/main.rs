@@ -147,13 +147,12 @@ fn main() -> Result<()> {
         .event_channel()
         .context("failed to get event channel")?
     {
-        if let event::WindowEvent::KeyboardInput(event) = event {
-            if event.input.key_code == Some(event::VirtualKeyCode::Escape)
+        if let event::WindowEvent::KeyboardInput(event) = event
+            && event.input.key_code == Some(event::VirtualKeyCode::Escape)
                 && event.input.state.is_pressed()
             {
                 break;
             }
-        }
     }
 
     Ok(())

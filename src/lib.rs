@@ -29,7 +29,7 @@ pub struct YoloInput {
 }
 
 impl YoloInput {
-    pub fn view(&self) -> YoloInputView {
+    pub fn view(&self) -> YoloInputView<'_> {
         YoloInputView {
             tensor_view: self.tensor.view(),
             raw_width: self.raw_width,
