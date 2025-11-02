@@ -149,10 +149,10 @@ fn main() -> Result<()> {
     {
         if let event::WindowEvent::KeyboardInput(event) = event
             && event.input.key_code == Some(event::VirtualKeyCode::Escape)
-                && event.input.state.is_pressed()
-            {
-                break;
-            }
+            && event.input.state.is_pressed()
+        {
+            break;
+        }
     }
 
     Ok(())
