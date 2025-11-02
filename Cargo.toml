@@ -13,10 +13,10 @@ exclude = [".github", "examples", ".envrc", "devenv*"]
 
 [dependencies]
 arcstr = "1.2.0"
-image = "0.25.6"
+image = "0.25.8"
 ndarray = "0.16.1"
 ort = "2.0.0-rc.10"
-thiserror = "2.0.12"
+thiserror = "2.0.17"
 
 [workspace]
 members = [
