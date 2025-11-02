@@ -13,3 +13,10 @@ where:
 - `models/yolo11x.onnx` is the path to the ONNX model file.
     - You can export the model according to [Ultralytics' manual](https://docs.ultralytics.com/integrations/onnx/).
 - `data/baseball.jpg` is the path to the image file.
+
+## Downloading models
+
+```shell
+mkdir models
+wget -O models/yolo11x.onnx https://huggingface.co/pan93412/yolo-v11-onnx/resolve/main/yolo11x.onnx
+```
