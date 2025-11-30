@@ -1251,7 +1251,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -2340,9 +2340,9 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "show-image"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2d6d4263fd19c1fbd0f4bbc0e0128de55dce8beb8f7d9052e09ee7f104c9eeb"
+checksum = "9867cbb8c3ae72f4d23ba01a17f96c639a10ca73a6cc750542bc8487642ddf38"
 dependencies = [
  "futures",
  "glam",
@@ -2357,9 +2357,9 @@ dependencies = [
 
 [[package]]
 name = "show-image-macros"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61837ba1e28bb121c95460d867ff3466d368c4f029abe42aaf0fd33f00e0dea5"
+checksum = "dcc70c0d64419601cee5ef5977947d01e4f3b85ccc14eca959f5405392dae747"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3179,7 +3179,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
