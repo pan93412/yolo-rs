@@ -1,0 +1,17 @@
+{
+  "files.exclude": {
+    "**/.venv": true,
+    "**/.mypy_cache": true,
+    "**/target": true,
+    "mobileclip*.pt": true,
+    "mobileclip*.ts": true,
+    "yoloe-*.onnx": true,
+    "yoloe-*.onnx.data": true,
+    "yoloe-*.pt": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/.mypy_cache": true,
+    "**/target": true
+  }
+}
