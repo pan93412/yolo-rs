@@ -10,7 +10,7 @@ use arcstr::ArcStr;
 use error::YoloError;
 use image::{DynamicImage, GenericImageView, Rgba, imageops::FilterType};
 use model::YoloModelSession;
-use ndarray::{Array4, ArrayBase, ArrayView4, Axis, s};
+use ndarray::{Array4, ArrayBase, ArrayView3, ArrayView4};
 use ort::{inputs, value::TensorRef};
 
 #[derive(Debug, Clone, Copy)]
@@ -87,7 +87,8 @@ pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
 /// Inference on the YOLO model, returning the detected entities.
 ///
 /// The input tensor should be obtained from the [`image_to_yolo_input_tensor`] function.
-/// The [`YoloModelSession`] can be obtained from the [`YoloModelSession::from_filename_v8`] method.
+/// The [`YoloModelSession`] can be obtained from the [`YoloModelSession::from_filename_v8`]
+/// or [`YoloModelSession::from_filename_with_labels`] methods.
 pub fn inference(
     model: &mut YoloModelSession,
     YoloInputView {
@@ -96,6 +97,35 @@ pub fn inference(
         raw_height,
     }: YoloInputView,
 ) -> Result<Vec<YoloEntityOutput>, YoloError> {
+    fn output_layout(
+        output: ArrayView3<'_, f32>,
+        label_count: usize,
+    ) -> Result<(usize, usize), YoloError> {
+        if output.shape()[0] != 1 {
+            return Err(YoloError::InvalidOutputShape(output.shape().to_vec()));
+        }
+
+        let channels_axis = if output.shape()[1] <= output.shape()[2] {
+            1
+        } else {
+            2
+        };
+        let detection_axis = if channels_axis == 1 { 2 } else { 1 };
+
+        let channel_count = output.shape()[channels_axis];
+        let required_channels = 4 + label_count;
+
+        if channel_count < required_channels {
+            return Err(YoloError::InsufficientDetectionChannels {
+                available: channel_count,
+                required: required_channels,
+                label_count,
+            });
+        }
+
+        Ok((channels_axis, output.shape()[detection_axis]))
+    }
+
     fn intersection(box1: &BoundingBox, box2: &BoundingBox) -> f32 {
         (box1.x2.min(box2.x2) - box1.x1.max(box2.x1))
             * (box1.y2.min(box2.y2) - box1.y1.max(box2.y1))
@@ -143,32 +173,50 @@ pub fn inference(
     let iou_threshold = model.get_iou_threshold();
     let probability_threshold = model.get_probability_threshold();
     let labels = model.get_labels().to_vec();
+    let input_name = model.get_input_name()?.to_owned();
+    let output_name = model.get_output_name()?.to_owned();
 
-    // Run YOLOv8 inference
-    let inputs = inputs!["images" => TensorRef::from_array_view(tensor_view).map_err(YoloError::OrtInputError)?];
+    // Run YOLO-style inference using the session's configured input/output names.
+    let inputs = inputs![input_name.as_str() => TensorRef::from_array_view(tensor_view).map_err(YoloError::OrtInputError)?];
     let outputs = model
         .as_mut()
         .run(inputs)
         .map_err(YoloError::OrtInferenceError)?;
-    let output = outputs["output0"]
+    let output = outputs[output_name.as_str()]
         .try_extract_array::<f32>()
-        .map_err(YoloError::OrtExtractSensorError)?
-        .reversed_axes();
-    let output = output.slice(s![.., .., 0]);
+        .map_err(YoloError::OrtExtractTensorError)?;
+    let output = output
+        .view()
+        .into_dimensionality::<ndarray::Ix3>()
+        .map_err(|_| YoloError::InvalidOutputShape(output.shape().to_vec()))?;
+    let (channels_axis, detection_count) = output_layout(output, labels.len())?;
 
     // Turn the output tensor into bounding boxes
-    let boxes = output
-        .axis_iter(Axis(0))
+    let boxes = (0..detection_count)
         .filter_map(|row| {
+            let row = if channels_axis == 1 {
+                output.slice(ndarray::s![0, .., row])
+            } else {
+                output.slice(ndarray::s![0, row, ..])
+            };
+
             let (class_id, prob) = row
                 .iter()
-                .skip(4) // skip bounding box coordinates
+                .skip(4)
+                .take(labels.len())
                 .enumerate()
                 .map(|(index, value)| (index, *value))
                 .reduce(|accum, row| if row.1 > accum.1 { row } else { accum })
                 .filter(|(_, prob)| *prob >= probability_threshold)?;
 
-            let label = labels[class_id].clone();
+            let label = labels
+                .get(class_id)
+                .cloned()
+                .ok_or(YoloError::UnknownClassId {
+                    class_id,
+                    label_count: labels.len(),
+                })
+                .ok()?;
 
             let xc = row[0_usize] / 640. * (raw_width as f32);
             let yc = row[1_usize] / 640. * (raw_height as f32);

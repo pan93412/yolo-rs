@@ -13,6 +13,8 @@ use crate::error::YoloError;
 pub struct YoloModelSession {
     pub session: ort::session::Session,
     pub labels: Vec<ArcStr>,
+    pub input_name: Option<ArcStr>,
+    pub output_name: Option<ArcStr>,
 
     pub probability_threshold: Option<f32>, // default = 0.5
     pub iou_threshold: Option<f32>,         // default = 0.7
@@ -29,6 +31,25 @@ impl YoloModelSession {
         Self {
             session,
             labels: labels.map(Into::into).collect(),
+            input_name: None,
+            output_name: None,
+            probability_threshold: None,
+            iou_threshold: None,
+        }
+    }
+
+    /// Wrap an ONNX session to a [`YoloModelSession`] with explicit input/output names.
+    pub fn new_with_io_names(
+        session: ort::session::Session,
+        labels: impl Iterator<Item = impl Into<ArcStr>>,
+        input_name: impl Into<ArcStr>,
+        output_name: impl Into<ArcStr>,
+    ) -> Self {
+        Self {
+            session,
+            labels: labels.map(Into::into).collect(),
+            input_name: Some(input_name.into()),
+            output_name: Some(output_name.into()),
             probability_threshold: None,
             iou_threshold: None,
         }
@@ -122,6 +143,8 @@ impl YoloModelSession {
         Self {
             session,
             labels: LABELS.to_vec(),
+            input_name: None,
+            output_name: None,
             probability_threshold: None,
             iou_threshold: None,
         }
@@ -143,6 +166,22 @@ impl YoloModelSession {
         Ok(Self::new_v8(session))
     }
 
+    /// Load a YOLO-style ONNX model from a filename with caller-provided labels.
+    ///
+    /// This is useful for exported YOLOE closed-set models where the class list is not
+    /// the default COCO vocabulary.
+    pub fn from_filename_with_labels(
+        filename: impl AsRef<Path>,
+        labels: impl Iterator<Item = impl Into<ArcStr>>,
+    ) -> Result<Self, YoloError> {
+        let session = ort::session::Session::builder()
+            .map_err(YoloError::OrtSessionBuildError)?
+            .commit_from_file(filename)
+            .map_err(YoloError::OrtSessionLoadError)?;
+
+        Ok(Self::new(session, labels))
+    }
+
     pub fn get_labels(&self) -> &[ArcStr] {
         &self.labels
     }
@@ -153,6 +192,20 @@ impl YoloModelSession {
 
     pub fn get_iou_threshold(&self) -> f32 {
         self.iou_threshold.unwrap_or(0.7)
+    }
+
+    pub fn get_input_name(&self) -> Result<&str, YoloError> {
+        self.input_name
+            .as_deref()
+            .or_else(|| self.session.inputs().first().map(|input| input.name()))
+            .ok_or(YoloError::MissingModelInput)
+    }
+
+    pub fn get_output_name(&self) -> Result<&str, YoloError> {
+        self.output_name
+            .as_deref()
+            .or_else(|| self.session.outputs().first().map(|output| output.name()))
+            .ok_or(YoloError::MissingModelOutput)
     }
 }
 

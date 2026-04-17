@@ -1,13 +1,13 @@
 # YOLO inference in Rust
 
-This project provides a Rust implementation of the YOLO v11 object detection model, enabling inference on images to identify objects along with their bounding boxes, labels, and confidence scores. It utilizes the YOLO v11 model in ONNX format and leverages the `ort` library for ONNX Runtime integration. The implementation is inspired by the [YOLOv8 example](https://github.com/pykeio/ort/tree/main/examples/yolov8) from the `ort` repository.
+This project provides a Rust implementation of YOLO-style ONNX object detection, enabling inference on images to identify objects along with their bounding boxes, labels, and confidence scores. It works out of the box with YOLO v8/v11 COCO exports and can also run exported closed-set YOLOE ONNX models when you provide the matching labels. The implementation is inspired by the [YOLOv8 example](https://github.com/pykeio/ort/tree/main/examples/yolov8) from the `ort` repository.
 
 See docs.rs for the [latest documentation](https://docs.rs/yolo-rs).
 
 ## Features
 
 - **Object Detection**: Detects objects within an image and provides their bounding boxes, labels, and confidence scores.
-- **ONNX Model Integration**: Employs the YOLO v11 model in ONNX format for efficient inference.
+- **YOLO-style ONNX Integration**: Supports default YOLO v8/v11 exports and exported closed-set YOLOE models.
 - **Rust Implementation**: Written entirely in Rust, ensuring performance and safety.
 - **ONNX Runtime**: Utilizes the `ort` library for executing the ONNX model.
 
@@ -30,6 +30,32 @@ On a MacBook Pro (2024) with M3 Max, it tooks about **57ms** to inferring an ima
 ## Examples
 
 - [**yolo-cli**](examples/yolo-cli): Command-line interface for running YOLO inference on images.
+
+## YOLOE support
+
+This crate can run exported YOLOE ONNX models when they behave like regular fixed-class detectors. In practice that means exporting from Ultralytics after configuring the classes you want to detect, then passing the same labels into `yolo-rs`.
+
+Example export flow in Python:
+
+```python
+from ultralytics import YOLOE
+
+model = YOLOE("yoloe-26s-seg.pt")
+model.set_classes(["person", "bus"])
+model.export(format="onnx")
+```
+
+Example CLI usage:
+
+```bash
+cargo run --release -p example-yolo-gui -- exported-yoloe.onnx image.jpg --label person --label bus
+```
+
+Current scope:
+
+- Closed-set YOLOE detection exported to ONNX is supported.
+- Detection heads with extra mask coefficients can be decoded for boxes and classes when you provide the label list.
+- Open-vocabulary text prompts, visual prompts, offline prompt embeddings, and segmentation mask decoding are not implemented in this crate yet.
 
 ## Acknowledgements
 

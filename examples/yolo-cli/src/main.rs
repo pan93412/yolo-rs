@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -13,11 +14,44 @@ struct Args {
     model_path: PathBuf,
     picture_path: PathBuf,
 
+    /// Override the class labels used to decode the model output.
+    ///
+    /// Pass this multiple times for exported YOLOE closed-set models, for example:
+    /// --label person --label bus
+    #[arg(long = "label")]
+    labels: Vec<String>,
+
+    /// Read class labels from a UTF-8 text file, one label per line.
+    #[arg(long)]
+    labels_file: Option<PathBuf>,
+
     #[arg(long)]
     probability_threshold: Option<f32>,
 
     #[arg(long)]
     iou_threshold: Option<f32>,
+}
+
+fn read_labels(args: &Args) -> Result<Option<Vec<String>>> {
+    let mut labels = if let Some(path) = &args.labels_file {
+        fs::read_to_string(path)
+            .with_context(|| format!("failed to read labels file {:?}", path.display()))?
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+
+    labels.extend(args.labels.iter().cloned());
+
+    if labels.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(labels))
+    }
 }
 
 #[show_image::main]
@@ -41,9 +75,17 @@ fn main() -> Result<()> {
         .with_context(|| format!("failed to open image {:?}", args.picture_path.display()))?;
 
     tracing::info!("Loading models {:?}…", args.model_path.display());
+    let labels = read_labels(&args)?;
     let mut model = {
-        let mut model = model::YoloModelSession::from_filename_v8(&args.model_path)
-            .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
+        let mut model = if let Some(labels) = labels {
+            model::YoloModelSession::from_filename_with_labels(
+                &args.model_path,
+                labels.into_iter(),
+            )
+        } else {
+            model::YoloModelSession::from_filename_v8(&args.model_path)
+        }
+        .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
 
         model.iou_threshold = args.iou_threshold;
         model.probability_threshold = args.probability_threshold;
