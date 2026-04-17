@@ -11,6 +11,9 @@ devenv.local.nix
 # Editor settings
 .vscode/
 
+# Local Cargo config
+.cargo/
+
 # Python local environment
 .venv/
 __pycache__/
