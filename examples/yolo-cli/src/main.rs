@@ -6,7 +6,11 @@ use clap::Parser;
 use ort::execution_providers::{CUDAExecutionProvider, CoreMLExecutionProvider};
 use raqote::{DrawOptions, DrawTarget, LineJoin, PathBuilder, SolidSource, Source, StrokeStyle};
 use show_image::{AsImageView, WindowOptions, event};
-use yolo_rs::{YoloEntityOutput, YoloSegmentationOutput, image_to_yolo_input_tensor, inference, inference_segment, model};
+use yolo_rs::{
+    YoloEntityOutput, YoloSegmentationOutput, image_to_yolo_input_tensor, inference,
+    inference_segment, inference_segment_with_prompts, inference_with_prompts, model,
+    prompt::YoloPromptEncoderSession,
+};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -20,6 +24,18 @@ struct Args {
     /// --label person --label bus
     #[arg(long = "label")]
     labels: Vec<String>,
+
+    /// Runtime open-vocabulary prompts for a promptable YOLOE ONNX model.
+    #[arg(long = "prompt")]
+    prompts: Vec<String>,
+
+    /// Path to a prompt-encoder ONNX model that converts tokenized text to prompt embeddings.
+    #[arg(long)]
+    prompt_encoder_model: Option<PathBuf>,
+
+    /// Path to a tokenizer JSON compatible with the prompt encoder.
+    #[arg(long)]
+    prompt_tokenizer: Option<PathBuf>,
 
     /// Read class labels from a UTF-8 text file, one label per line.
     #[arg(long)]
@@ -80,8 +96,11 @@ fn main() -> Result<()> {
 
     tracing::info!("Loading models {:?}…", args.model_path.display());
     let labels = read_labels(&args)?;
+    let prompt_mode = !args.prompts.is_empty();
     let mut model = {
-        let mut model = if let Some(labels) = labels {
+        let mut model = if prompt_mode {
+            model::YoloModelSession::from_filename(&args.model_path)
+        } else if let Some(labels) = labels {
             model::YoloModelSession::from_filename_with_labels(
                 &args.model_path,
                 labels.into_iter(),
@@ -100,6 +119,32 @@ fn main() -> Result<()> {
     tracing::debug!("Converting image to tensor…");
     let input = image_to_yolo_input_tensor(&original_img);
 
+    let prompt_embeddings = if prompt_mode {
+        let prompt_encoder_model = args
+            .prompt_encoder_model
+            .as_ref()
+            .context("--prompt-encoder-model is required when using --prompt")?;
+        let prompt_tokenizer = args
+            .prompt_tokenizer
+            .as_ref()
+            .context("--prompt-tokenizer is required when using --prompt")?;
+        tracing::info!("Encoding runtime prompts…");
+        let mut prompt_encoder = YoloPromptEncoderSession::from_files(
+            prompt_encoder_model,
+            prompt_tokenizer,
+        )
+        .with_context(|| {
+            format!(
+                "failed to load prompt encoder {:?} and tokenizer {:?}",
+                prompt_encoder_model.display(),
+                prompt_tokenizer.display()
+            )
+        })?;
+        Some(prompt_encoder.encode(args.prompts.iter().map(String::as_str))?)
+    } else {
+        None
+    };
+
     // Run YOLOv8 inference
     tracing::info!("Running inference…");
 
@@ -108,7 +153,11 @@ fn main() -> Result<()> {
     let result = if has_mask_output {
         let (img_width, img_height) = (original_img.width(), original_img.height());
         let mut dt = DrawTarget::new(img_width as _, img_height as _);
-        let result = inference_segment(&mut model, input.view())?;
+        let result = if let Some(prompt_embeddings) = prompt_embeddings.as_ref() {
+            inference_segment_with_prompts(&mut model, input.view(), prompt_embeddings.view())?
+        } else {
+            inference_segment(&mut model, input.view())?
+        };
         let data = dt.get_data_mut();
         for YoloSegmentationOutput { entity, mask } in &result {
             let fill = match entity.label.as_str() {
@@ -129,7 +178,14 @@ fn main() -> Result<()> {
     } else {
         let (img_width, img_height) = (original_img.width(), original_img.height());
         let dt = DrawTarget::new(img_width as _, img_height as _);
-        (inference(&mut model, input.view())?, dt)
+        (
+            if let Some(prompt_embeddings) = prompt_embeddings.as_ref() {
+                inference_with_prompts(&mut model, input.view(), prompt_embeddings.view())?
+            } else {
+                inference(&mut model, input.view())?
+            },
+            dt,
+        )
     };
 
     tracing::info!("Inference took {:?}", now.elapsed());

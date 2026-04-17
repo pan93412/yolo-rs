@@ -66,7 +66,38 @@ Current scope:
 - Detection heads with extra mask coefficients can be decoded for boxes and classes when you provide the label list.
 - Segmentation-style exports can decode instance masks from `output1` and the mask coefficients stored in `output0`.
 - Preprocessing and box rescaling now follow YOLO-style letterboxing instead of stretching the image to `640x640`.
-- Runtime open-vocabulary text prompts and visual prompts are not implemented for ONNX in this crate. Ultralytics' exported ONNX graphs expose only the `images` input, so prompts must be fused into the model before export via `set_classes(...)`.
+- Runtime open-vocabulary prompting is available only for custom promptable YOLOE ONNX exports that expose a prompt embedding input. Ultralytics' stock ONNX exporter still emits single-input graphs, so those default exports must keep using `set_classes(...)` before export.
+
+## True Runtime Prompting
+
+`yolo-rs` now also supports promptable YOLOE ONNX graphs with a second model input for prompt embeddings.
+
+That path is different from Ultralytics' stock `model.export(format="onnx")`, which still emits a single-input ONNX and bakes prompts in ahead of time. For true runtime open-vocabulary prompting you need three artifacts:
+
+- a promptable YOLOE detector ONNX with inputs `images` and `prompt_embeddings`
+- a prompt-encoder ONNX that converts tokenized text into the detector's prompt embedding space
+- a tokenizer JSON compatible with that prompt encoder
+
+This repository includes a helper export script at [scripts/export_promptable_yoloe.py](/Users/vincent/Work/yolo-rs/scripts/export_promptable_yoloe.py) to generate those assets from upstream YOLOE weights.
+
+Example CLI usage once those assets exist:
+
+```bash
+cargo run --release -p example-yolo-gui -- \
+    exported-promptable-yoloe/yoloe-promptable.onnx \
+    examples/yolo-cli/data/baseball.jpg \
+    --prompt person \
+    --prompt "baseball bat" \
+    --prompt "baseball glove" \
+    --prompt-encoder-model exported-promptable-yoloe/yoloe-prompt-encoder.onnx \
+    --prompt-tokenizer exported-promptable-yoloe/tokenizer.json
+```
+
+Current runtime-prompt scope:
+
+- `yolo-rs` can run promptable two-input YOLOE ONNX graphs with runtime text prompts.
+- The prompt encoder is a separate ONNX model; prompt strings are tokenized in Rust and encoded at runtime.
+- Stock Ultralytics ONNX exports remain single-input closed-set graphs, so they still require `set_classes(...)` before export.
 
 ## Acknowledgements
 

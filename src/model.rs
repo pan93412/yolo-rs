@@ -21,6 +21,16 @@ pub struct YoloModelSession {
 }
 
 impl YoloModelSession {
+    /// Wrap a generic ONNX session to a [`YoloModelSession`] without predefined labels.
+    pub fn from_filename(filename: impl AsRef<Path>) -> Result<Self, YoloError> {
+        let session = ort::session::Session::builder()
+            .map_err(YoloError::OrtSessionBuildError)?
+            .commit_from_file(filename)
+            .map_err(YoloError::OrtSessionLoadError)?;
+
+        Ok(Self::new(session, std::iter::empty::<ArcStr>()))
+    }
+
     /// Wrap a ONNX session to a [`YoloModelSession`].
     ///
     /// The `session` is the ONNX runtime session, and the `labels` are the YOLO labels.
@@ -206,6 +216,14 @@ impl YoloModelSession {
             .as_deref()
             .or_else(|| self.session.outputs().first().map(|output| output.name()))
             .ok_or(YoloError::MissingModelOutput)
+    }
+
+    pub fn get_prompt_input_name(&self) -> Result<&str, YoloError> {
+        self.session
+            .inputs()
+            .get(1)
+            .map(|input| input.name())
+            .ok_or(YoloError::MissingPromptInput)
     }
 
     pub fn get_mask_output_name(&self) -> Result<&str, YoloError> {

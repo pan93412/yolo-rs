@@ -5,6 +5,7 @@
 
 pub mod error;
 pub mod model;
+pub mod prompt;
 
 use arcstr::ArcStr;
 use error::YoloError;
@@ -12,6 +13,7 @@ use image::{DynamicImage, GenericImageView, GrayImage, Luma, Rgba, imageops::Fil
 use model::YoloModelSession;
 use ndarray::{Array4, ArrayBase, ArrayView3, ArrayView4};
 use ort::{inputs, value::TensorRef};
+use prompt::YoloPromptEmbeddingsView;
 
 const DEFAULT_MODEL_SIZE: u32 = 640;
 
@@ -78,6 +80,24 @@ pub struct YoloEntityOutput {
 pub struct YoloSegmentationOutput {
     pub entity: YoloEntityOutput,
     pub mask: GrayImage,
+}
+
+fn validate_prompt_embeddings(
+    prompts: YoloPromptEmbeddingsView<'_>,
+) -> Result<YoloPromptEmbeddingsView<'_>, YoloError> {
+    if prompts.embeddings.shape().len() != 3 || prompts.embeddings.shape()[0] != 1 {
+        return Err(YoloError::InvalidPromptEmbeddingShape(
+            prompts.embeddings.shape().to_vec(),
+        ));
+    }
+    if prompts.labels.len() != prompts.embeddings.shape()[1] {
+        return Err(YoloError::PromptLabelEmbeddingMismatch {
+            labels: prompts.labels.len(),
+            embeddings: prompts.embeddings.shape()[1],
+        });
+    }
+
+    Ok(prompts)
 }
 
 #[derive(Debug, Clone)]
@@ -417,6 +437,65 @@ pub fn inference(
         .collect())
 }
 
+pub fn inference_with_prompts(
+    model: &mut YoloModelSession,
+    YoloInputView {
+        tensor_view,
+        raw_width,
+        raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
+    }: YoloInputView,
+    prompts: YoloPromptEmbeddingsView<'_>,
+) -> Result<Vec<YoloEntityOutput>, YoloError> {
+    let prompts = validate_prompt_embeddings(prompts)?;
+    let iou_threshold = model.get_iou_threshold();
+    let probability_threshold = model.get_probability_threshold();
+    let input_name = model.get_input_name()?.to_owned();
+    let prompt_input_name = model.get_prompt_input_name()?.to_owned();
+    let output_name = model.get_output_name()?.to_owned();
+
+    let inputs = inputs![
+        input_name.as_str() => TensorRef::from_array_view(tensor_view).map_err(YoloError::OrtInputError)?,
+        prompt_input_name.as_str() => TensorRef::from_array_view(prompts.embeddings).map_err(YoloError::OrtInputError)?,
+    ];
+    let outputs = model
+        .as_mut()
+        .run(inputs)
+        .map_err(YoloError::OrtInferenceError)?;
+    let output = outputs[output_name.as_str()]
+        .try_extract_array::<f32>()
+        .map_err(YoloError::OrtExtractTensorError)?;
+    let output = output
+        .view()
+        .into_dimensionality::<ndarray::Ix3>()
+        .map_err(|_| YoloError::InvalidOutputShape(output.shape().to_vec()))?;
+    let letterbox = LetterboxInfo {
+        raw_width,
+        raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
+    };
+    let boxes = decode_detections(
+        output,
+        prompts.labels,
+        probability_threshold,
+        letterbox,
+        None,
+    )?;
+
+    Ok(non_maximum_suppression(boxes, iou_threshold)
+        .into_iter()
+        .map(|decoded| decoded.entity)
+        .collect())
+}
+
 /// Inference on a segmentation-style YOLO model, returning the detected entities and decoded masks.
 ///
 /// This is intended for YOLO segmentation exports, including exported closed-set YOLOE segmentation models.
@@ -478,6 +557,82 @@ pub fn inference_segment(
     let boxes = decode_detections(
         detection_output,
         &labels,
+        probability_threshold,
+        letterbox,
+        Some(prototype_count),
+    )?;
+    let boxes = non_maximum_suppression(boxes, iou_threshold);
+
+    decode_segmentation_masks(
+        boxes,
+        mask_output.slice(ndarray::s![0, .., .., ..]),
+        letterbox,
+    )
+}
+
+pub fn inference_segment_with_prompts(
+    model: &mut YoloModelSession,
+    YoloInputView {
+        tensor_view,
+        raw_width,
+        raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
+    }: YoloInputView,
+    prompts: YoloPromptEmbeddingsView<'_>,
+) -> Result<Vec<YoloSegmentationOutput>, YoloError> {
+    let prompts = validate_prompt_embeddings(prompts)?;
+    let iou_threshold = model.get_iou_threshold();
+    let probability_threshold = model.get_probability_threshold();
+    let input_name = model.get_input_name()?.to_owned();
+    let prompt_input_name = model.get_prompt_input_name()?.to_owned();
+    let output_name = model.get_output_name()?.to_owned();
+    let mask_output_name = model.get_mask_output_name()?.to_owned();
+
+    let inputs = inputs![
+        input_name.as_str() => TensorRef::from_array_view(tensor_view).map_err(YoloError::OrtInputError)?,
+        prompt_input_name.as_str() => TensorRef::from_array_view(prompts.embeddings).map_err(YoloError::OrtInputError)?,
+    ];
+    let outputs = model
+        .as_mut()
+        .run(inputs)
+        .map_err(YoloError::OrtInferenceError)?;
+
+    let detection_output = outputs[output_name.as_str()]
+        .try_extract_array::<f32>()
+        .map_err(YoloError::OrtExtractTensorError)?;
+    let detection_output = detection_output
+        .view()
+        .into_dimensionality::<ndarray::Ix3>()
+        .map_err(|_| YoloError::InvalidOutputShape(detection_output.shape().to_vec()))?;
+
+    let mask_output = outputs[mask_output_name.as_str()]
+        .try_extract_array::<f32>()
+        .map_err(YoloError::OrtExtractTensorError)?;
+    let mask_output = mask_output
+        .view()
+        .into_dimensionality::<ndarray::Ix4>()
+        .map_err(|_| YoloError::InvalidMaskShape(mask_output.shape().to_vec()))?;
+    if mask_output.shape()[0] != 1 {
+        return Err(YoloError::InvalidMaskShape(mask_output.shape().to_vec()));
+    }
+
+    let letterbox = LetterboxInfo {
+        raw_width,
+        raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
+    };
+    let prototype_count = mask_output.shape()[1];
+    let boxes = decode_detections(
+        detection_output,
+        prompts.labels,
         probability_threshold,
         letterbox,
         Some(prototype_count),
