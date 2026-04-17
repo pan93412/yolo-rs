@@ -8,6 +8,9 @@ devenv.local.nix
 # pre-commit
 .pre-commit-config.yaml
 
+# Editor settings
+.vscode/
+
 # Python local environment
 .venv/
 __pycache__/
