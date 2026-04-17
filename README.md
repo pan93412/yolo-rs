@@ -35,20 +35,29 @@ On a MacBook Pro (2024) with M3 Max, it tooks about **57ms** to inferring an ima
 
 This crate can run exported YOLOE ONNX models when they behave like regular fixed-class detectors. In practice that means exporting from Ultralytics after configuring the classes you want to detect, then passing the same labels into `yolo-rs`.
 
-Example export flow in Python:
+Validated export flow in Python:
 
 ```python
 from ultralytics import YOLOE
 
-model = YOLOE("yoloe-26s-seg.pt")
-model.set_classes(["person", "bus"])
+model = YOLOE("yoloe-v8s-seg.pt")
+embeddings = model.get_text_pe(["person", "baseball bat", "baseball glove"])
+model.set_classes(["person", "baseball bat", "baseball glove"], embeddings)
 model.export(format="onnx")
 ```
+
+That export produces a standard segmentation-style ONNX graph with:
+
+- input `images` shaped `[1, 3, 640, 640]`
+- output `output0` shaped `[1, 39, 8400]`
+- output `output1` shaped `[1, 32, 160, 160]`
+
+`yolo-rs` currently uses `output0` for box and class decoding and ignores `output1` and the trailing mask coefficients.
 
 Example CLI usage:
 
 ```bash
-cargo run --release -p example-yolo-gui -- exported-yoloe.onnx image.jpg --label person --label bus
+cargo run --release -p example-yolo-gui -- yoloe-v8s-seg.onnx examples/yolo-cli/data/baseball.jpg --labels-file target/yoloe_inspect_v839/yoloe.labels.txt --no-display
 ```
 
 Current scope:

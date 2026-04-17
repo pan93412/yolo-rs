@@ -30,6 +30,10 @@ struct Args {
 
     #[arg(long)]
     iou_threshold: Option<f32>,
+
+    /// Skip opening the GUI window and only print detections.
+    #[arg(long)]
+    no_display: bool,
 }
 
 fn read_labels(args: &Args) -> Result<Option<Vec<String>>> {
@@ -157,6 +161,10 @@ fn main() -> Result<()> {
             },
             &DrawOptions::new(),
         );
+    }
+
+    if args.no_display {
+        return Ok(());
     }
 
     let overlay: show_image::Image = dt.into();

@@ -20,6 +20,12 @@ For exported closed-set YOLOE models, pass the matching labels when you run the 
 cargo run --release exported-yoloe.onnx image.jpg --label person --label bus
 ```
 
+For non-interactive validation, skip the GUI window:
+
+```bash
+cargo run --release exported-yoloe.onnx image.jpg --labels-file labels.txt --no-display
+```
+
 You can also load labels from a file:
 
 ```bash
