@@ -1,12 +1,12 @@
 # YOLO inference in Rust
 
-This project provides a Rust implementation of YOLO-style ONNX object detection, enabling inference on images to identify objects along with their bounding boxes, labels, and confidence scores. It works out of the box with YOLO v8/v11 COCO exports and can also run exported closed-set YOLOE ONNX models when you provide the matching labels. The implementation is inspired by the [YOLOv8 example](https://github.com/pykeio/ort/tree/main/examples/yolov8) from the `ort` repository.
+This project provides a Rust implementation of YOLO-style ONNX inference, enabling detection and segmentation on images with bounding boxes, labels, confidence scores, and decoded masks. It works out of the box with YOLO v8/v11 COCO exports and can also run exported closed-set YOLOE ONNX models when you provide the matching labels. The implementation is inspired by the [YOLOv8 example](https://github.com/pykeio/ort/tree/main/examples/yolov8) from the `ort` repository.
 
 See docs.rs for the [latest documentation](https://docs.rs/yolo-rs).
 
 ## Features
 
-- **Object Detection**: Detects objects within an image and provides their bounding boxes, labels, and confidence scores.
+- **Object Detection and Segmentation**: Detects objects within an image and provides their bounding boxes, labels, confidence scores, and segmentation masks when the model exports them.
 - **YOLO-style ONNX Integration**: Supports default YOLO v8/v11 exports and exported closed-set YOLOE models.
 - **Rust Implementation**: Written entirely in Rust, ensuring performance and safety.
 - **ONNX Runtime**: Utilizes the `ort` library for executing the ONNX model.
@@ -52,8 +52,7 @@ That export produces a standard segmentation-style ONNX graph with:
 - output `output0` shaped `[1, 39, 8400]`
 - output `output1` shaped `[1, 32, 160, 160]`
 
-`yolo-rs` currently uses `output0` for box and class decoding and ignores `output1` and the trailing mask coefficients.
-`yolo-rs` now also decodes `output1` and the trailing mask coefficients when you run a segmentation-style export through the example CLI.
+`yolo-rs` follows the same broad exported ONNX contract as Ultralytics' YOLO segmentation examples: it letterboxes the input image, decodes boxes from `output0`, and reconstructs instance masks from the trailing mask coefficients in `output0` plus the prototype tensor in `output1`.
 
 Example CLI usage:
 
@@ -66,6 +65,7 @@ Current scope:
 - Closed-set YOLOE detection exported to ONNX is supported.
 - Detection heads with extra mask coefficients can be decoded for boxes and classes when you provide the label list.
 - Segmentation-style exports can decode instance masks from `output1` and the mask coefficients stored in `output0`.
+- Preprocessing and box rescaling now follow YOLO-style letterboxing instead of stretching the image to `640x640`.
 - Runtime open-vocabulary text prompts and visual prompts are not implemented for ONNX in this crate. Ultralytics' exported ONNX graphs expose only the `images` input, so prompts must be fused into the model before export via `set_classes(...)`.
 
 ## Acknowledgements

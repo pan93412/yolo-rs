@@ -1,7 +1,7 @@
-//! A Rust library for the YOLO v11 object detection model.
+//! A Rust library for YOLO-style ONNX detection and segmentation models.
 //!
-//! This library provides a high-level API for running the YOLO v11 object detection model.
-//! Currently, it supports only the inference.
+//! This library provides a high-level API for running YOLO-style ONNX models,
+//! including exported closed-set YOLOE segmentation models.
 
 pub mod error;
 pub mod model;
@@ -12,6 +12,8 @@ use image::{DynamicImage, GenericImageView, GrayImage, Luma, Rgba, imageops::Fil
 use model::YoloModelSession;
 use ndarray::{Array4, ArrayBase, ArrayView3, ArrayView4};
 use ort::{inputs, value::TensorRef};
+
+const DEFAULT_MODEL_SIZE: u32 = 640;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BoundingBox {
@@ -26,6 +28,11 @@ pub struct YoloInput {
     pub tensor: Array4<f32>, // 640x640
     pub raw_width: u32,
     pub raw_height: u32,
+    pub model_width: u32,
+    pub model_height: u32,
+    pub resize_ratio: f32,
+    pub pad_w: f32,
+    pub pad_h: f32,
 }
 
 impl YoloInput {
@@ -34,6 +41,11 @@ impl YoloInput {
             tensor_view: self.tensor.view(),
             raw_width: self.raw_width,
             raw_height: self.raw_height,
+            model_width: self.model_width,
+            model_height: self.model_height,
+            resize_ratio: self.resize_ratio,
+            pad_w: self.pad_w,
+            pad_h: self.pad_h,
         }
     }
 }
@@ -43,6 +55,11 @@ pub struct YoloInputView<'a> {
     pub tensor_view: ArrayView4<'a, f32>,
     pub raw_width: u32,
     pub raw_height: u32,
+    pub model_width: u32,
+    pub model_height: u32,
+    pub resize_ratio: f32,
+    pub pad_w: f32,
+    pub pad_h: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +84,17 @@ pub struct YoloSegmentationOutput {
 struct DecodedDetection {
     entity: YoloEntityOutput,
     mask_coefficients: Vec<f32>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LetterboxInfo {
+    raw_width: u32,
+    raw_height: u32,
+    model_width: u32,
+    model_height: u32,
+    resize_ratio: f32,
+    pad_w: f32,
+    pad_h: f32,
 }
 
 fn output_layout(output: ArrayView3<'_, f32>, label_count: usize) -> Result<(usize, usize), YoloError> {
@@ -129,8 +157,7 @@ fn decode_detections(
     output: ArrayView3<'_, f32>,
     labels: &[ArcStr],
     probability_threshold: f32,
-    raw_width: u32,
-    raw_height: u32,
+    letterbox: LetterboxInfo,
     expected_mask_coefficients: Option<usize>,
 ) -> Result<Vec<DecodedDetection>, YoloError> {
     let (channels_axis, detection_count) = output_layout(output, labels.len())?;
@@ -177,18 +204,18 @@ fn decode_detections(
                 }));
             }
 
-            let xc = row[0_usize] / 640. * (raw_width as f32);
-            let yc = row[1_usize] / 640. * (raw_height as f32);
-            let w = row[2_usize] / 640. * (raw_width as f32);
-            let h = row[3_usize] / 640. * (raw_height as f32);
+            let x1 = ((row[0_usize] - row[2_usize] / 2.0) - letterbox.pad_w) / letterbox.resize_ratio;
+            let y1 = ((row[1_usize] - row[3_usize] / 2.0) - letterbox.pad_h) / letterbox.resize_ratio;
+            let x2 = ((row[0_usize] + row[2_usize] / 2.0) - letterbox.pad_w) / letterbox.resize_ratio;
+            let y2 = ((row[1_usize] + row[3_usize] / 2.0) - letterbox.pad_h) / letterbox.resize_ratio;
 
             Some(Ok(DecodedDetection {
                 entity: YoloEntityOutput {
                     bounding_box: BoundingBox {
-                        x1: xc - w / 2.,
-                        y1: yc - h / 2.,
-                        x2: xc + w / 2.,
-                        y2: yc + h / 2.,
+                        x1: x1.clamp(0.0, letterbox.raw_width as f32),
+                        y1: y1.clamp(0.0, letterbox.raw_height as f32),
+                        x2: x2.clamp(0.0, letterbox.raw_width as f32),
+                        y2: y2.clamp(0.0, letterbox.raw_height as f32),
                     },
                     label,
                     confidence: prob,
@@ -202,28 +229,30 @@ fn decode_detections(
 fn decode_segmentation_masks(
     detections: Vec<DecodedDetection>,
     prototypes: ArrayView3<'_, f32>,
-    raw_width: u32,
-    raw_height: u32,
+    letterbox: LetterboxInfo,
 ) -> Result<Vec<YoloSegmentationOutput>, YoloError> {
     let prototype_count = prototypes.shape()[0];
     let mask_height = prototypes.shape()[1];
     let mask_width = prototypes.shape()[2];
 
+    let mask_pad_w = letterbox.pad_w * (mask_width as f32 / letterbox.model_width as f32);
+    let mask_pad_h = letterbox.pad_h * (mask_height as f32 / letterbox.model_height as f32);
+    let mask_content_width = (mask_width as f32 - (mask_pad_w * 2.0)).max(1.0);
+    let mask_content_height = (mask_height as f32 - (mask_pad_h * 2.0)).max(1.0);
+
     let mut results = Vec::with_capacity(detections.len());
     for detection in detections {
-        let mut mask = GrayImage::new(raw_width, raw_height);
+        let mut mask = GrayImage::new(letterbox.raw_width, letterbox.raw_height);
         let bbox = detection.entity.bounding_box;
 
         let start_x = bbox.x1.floor().max(0.0) as u32;
-        let end_x = bbox.x2.ceil().min(raw_width as f32) as u32;
+        let end_x = bbox.x2.ceil().min(letterbox.raw_width as f32) as u32;
         let start_y = bbox.y1.floor().max(0.0) as u32;
-        let end_y = bbox.y2.ceil().min(raw_height as f32) as u32;
+        let end_y = bbox.y2.ceil().min(letterbox.raw_height as f32) as u32;
 
-        for y in start_y..end_y {
-            let proto_y = ((y as usize) * mask_height) / (raw_height as usize);
-            for x in start_x..end_x {
-                let proto_x = ((x as usize) * mask_width) / (raw_width as usize);
-
+        let mut proto_mask = vec![0.0f32; mask_width * mask_height];
+        for proto_y in 0..mask_height {
+            for proto_x in 0..mask_width {
                 let value = detection
                     .mask_coefficients
                     .iter()
@@ -231,8 +260,17 @@ fn decode_segmentation_masks(
                     .enumerate()
                     .map(|(index, coefficient)| coefficient * prototypes[[index, proto_y, proto_x]])
                     .sum::<f32>();
+                proto_mask[proto_y * mask_width + proto_x] = value;
+            }
+        }
 
-                if value > 0.0 {
+        for y in start_y..end_y {
+            for x in start_x..end_x {
+                let scaled_x = ((x as f32 + 0.5) / letterbox.raw_width as f32) * mask_content_width + mask_pad_w;
+                let scaled_y = ((y as f32 + 0.5) / letterbox.raw_height as f32) * mask_content_height + mask_pad_h;
+                let value = bilinear_sample(&proto_mask, mask_width, mask_height, scaled_x, scaled_y);
+
+                if value > 0.5 {
                     mask.put_pixel(x, y, Luma([255]));
                 }
             }
@@ -247,6 +285,28 @@ fn decode_segmentation_masks(
     Ok(results)
 }
 
+fn bilinear_sample(buffer: &[f32], width: usize, height: usize, x: f32, y: f32) -> f32 {
+    let x = x.clamp(0.0, (width.saturating_sub(1)) as f32);
+    let y = y.clamp(0.0, (height.saturating_sub(1)) as f32);
+
+    let x0 = x.floor() as usize;
+    let y0 = y.floor() as usize;
+    let x1 = (x0 + 1).min(width.saturating_sub(1));
+    let y1 = (y0 + 1).min(height.saturating_sub(1));
+
+    let dx = x - x0 as f32;
+    let dy = y - y0 as f32;
+
+    let top_left = buffer[y0 * width + x0];
+    let top_right = buffer[y0 * width + x1];
+    let bottom_left = buffer[y1 * width + x0];
+    let bottom_right = buffer[y1 * width + x1];
+
+    let top = top_left + dx * (top_right - top_left);
+    let bottom = bottom_left + dx * (bottom_right - bottom_left);
+    top + dy * (bottom - top)
+}
+
 /// Convert an image to a YOLO input tensor.
 ///
 /// The input image is resized to 640x640 and normalized to the range [0, 1].
@@ -255,12 +315,28 @@ fn decode_segmentation_masks(
 /// You can pass the resulting tensor to the [`inference`] function.
 /// Note that you might need to call [`YoloInput::view`] to get a view of the tensor.
 pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
-    let mut input = ArrayBase::zeros((1, 3, 640, 640));
+    let model_width = DEFAULT_MODEL_SIZE;
+    let model_height = DEFAULT_MODEL_SIZE;
+    let mut input = ArrayBase::from_elem(
+        (1, 3, model_height as usize, model_width as usize),
+        114.0f32 / 255.0,
+    );
 
-    let image = original_image.resize_exact(640, 640, FilterType::CatmullRom);
+    let raw_width = original_image.width();
+    let raw_height = original_image.height();
+    let resize_ratio = (model_width as f32 / raw_width as f32)
+        .min(model_height as f32 / raw_height as f32);
+    let resized_width = ((raw_width as f32) * resize_ratio).round() as u32;
+    let resized_height = ((raw_height as f32) * resize_ratio).round() as u32;
+    let pad_w = (model_width as f32 - resized_width as f32) / 2.0;
+    let pad_h = (model_height as f32 - resized_height as f32) / 2.0;
+    let left = (pad_w - 0.1).round().max(0.0) as usize;
+    let top = (pad_h - 0.1).round().max(0.0) as usize;
+
+    let image = original_image.resize_exact(resized_width, resized_height, FilterType::CatmullRom);
     for (x, y, Rgba([r, g, b, _])) in image.pixels() {
-        let x = x as usize;
-        let y = y as usize;
+        let x = left + x as usize;
+        let y = top + y as usize;
 
         input[[0, 0, y, x]] = (r as f32) / 255.;
         input[[0, 1, y, x]] = (g as f32) / 255.;
@@ -269,8 +345,13 @@ pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
 
     YoloInput {
         tensor: input,
-        raw_width: original_image.width(),
-        raw_height: original_image.height(),
+        raw_width,
+        raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
     }
 }
 
@@ -285,6 +366,11 @@ pub fn inference(
         tensor_view,
         raw_width,
         raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
     }: YoloInputView,
 ) -> Result<Vec<YoloEntityOutput>, YoloError> {
     // Due to the lifetime of the model, we need to clone the
@@ -308,12 +394,20 @@ pub fn inference(
         .view()
         .into_dimensionality::<ndarray::Ix3>()
         .map_err(|_| YoloError::InvalidOutputShape(output.shape().to_vec()))?;
+    let letterbox = LetterboxInfo {
+        raw_width,
+        raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
+    };
     let boxes = decode_detections(
         output,
         &labels,
         probability_threshold,
-        raw_width,
-        raw_height,
+        letterbox,
         None,
     )?;
 
@@ -332,6 +426,11 @@ pub fn inference_segment(
         tensor_view,
         raw_width,
         raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
     }: YoloInputView,
 ) -> Result<Vec<YoloSegmentationOutput>, YoloError> {
     let iou_threshold = model.get_iou_threshold();
@@ -367,12 +466,20 @@ pub fn inference_segment(
     }
 
     let prototype_count = mask_output.shape()[1];
+    let letterbox = LetterboxInfo {
+        raw_width,
+        raw_height,
+        model_width,
+        model_height,
+        resize_ratio,
+        pad_w,
+        pad_h,
+    };
     let boxes = decode_detections(
         detection_output,
         &labels,
         probability_threshold,
-        raw_width,
-        raw_height,
+        letterbox,
         Some(prototype_count),
     )?;
     let boxes = non_maximum_suppression(boxes, iou_threshold);
@@ -380,7 +487,6 @@ pub fn inference_segment(
     decode_segmentation_masks(
         boxes,
         mask_output.slice(ndarray::s![0, .., .., ..]),
-        raw_width,
-        raw_height,
+        letterbox,
     )
 }
