@@ -26,6 +26,10 @@ For non-interactive validation, skip the GUI window:
 cargo run --release exported-yoloe.onnx image.jpg --labels-file labels.txt --no-display
 ```
 
+For segmentation-style exports, the CLI will also decode and draw instance masks when the model exposes a second ONNX output with mask prototypes.
+
+Open-vocabulary runtime prompting is not available for exported ONNX models in this crate. For YOLOE, prompts must be configured before export so the exported graph behaves like a fixed-class detector.
+
 You can also load labels from a file:
 
 ```bash

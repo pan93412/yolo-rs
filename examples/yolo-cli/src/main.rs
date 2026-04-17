@@ -6,7 +6,7 @@ use clap::Parser;
 use ort::execution_providers::{CUDAExecutionProvider, CoreMLExecutionProvider};
 use raqote::{DrawOptions, DrawTarget, LineJoin, PathBuilder, SolidSource, Source, StrokeStyle};
 use show_image::{AsImageView, WindowOptions, event};
-use yolo_rs::{YoloEntityOutput, image_to_yolo_input_tensor, inference, model};
+use yolo_rs::{YoloEntityOutput, YoloSegmentationOutput, image_to_yolo_input_tensor, inference, inference_segment, model};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -104,13 +104,39 @@ fn main() -> Result<()> {
     tracing::info!("Running inference…");
 
     let now = std::time::Instant::now();
-    let result = inference(&mut model, input.view())?;
+    let has_mask_output = model.session.outputs().len() > 1;
+    let result = if has_mask_output {
+        let (img_width, img_height) = (original_img.width(), original_img.height());
+        let mut dt = DrawTarget::new(img_width as _, img_height as _);
+        let result = inference_segment(&mut model, input.view())?;
+        let data = dt.get_data_mut();
+        for YoloSegmentationOutput { entity, mask } in &result {
+            let fill = match entity.label.as_str() {
+                "baseball bat" => 0x40001080u32,
+                "baseball glove" => 0x40208040u32,
+                _ => 0x40801040u32,
+            };
+
+            for (x, y, pixel) in mask.enumerate_pixels() {
+                if pixel.0[0] > 0 {
+                    let index = (y as usize) * (img_width as usize) + (x as usize);
+                    data[index] = fill;
+                }
+            }
+        }
+
+        (result.into_iter().map(|output| output.entity).collect::<Vec<_>>(), dt)
+    } else {
+        let (img_width, img_height) = (original_img.width(), original_img.height());
+        let dt = DrawTarget::new(img_width as _, img_height as _);
+        (inference(&mut model, input.view())?, dt)
+    };
+
     tracing::info!("Inference took {:?}", now.elapsed());
 
     tracing::debug!("Drawing bounding boxes…");
     let (img_width, img_height) = (original_img.width(), original_img.height());
-
-    let mut dt = DrawTarget::new(img_width as _, img_height as _);
+    let (result, mut dt) = result;
 
     for YoloEntityOutput {
         bounding_box: bbox,

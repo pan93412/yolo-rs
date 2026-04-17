@@ -207,6 +207,14 @@ impl YoloModelSession {
             .or_else(|| self.session.outputs().first().map(|output| output.name()))
             .ok_or(YoloError::MissingModelOutput)
     }
+
+    pub fn get_mask_output_name(&self) -> Result<&str, YoloError> {
+        self.session
+            .outputs()
+            .get(1)
+            .map(|output| output.name())
+            .ok_or(YoloError::MissingMaskOutput)
+    }
 }
 
 impl AsRef<ort::session::Session> for YoloModelSession {

@@ -53,6 +53,7 @@ That export produces a standard segmentation-style ONNX graph with:
 - output `output1` shaped `[1, 32, 160, 160]`
 
 `yolo-rs` currently uses `output0` for box and class decoding and ignores `output1` and the trailing mask coefficients.
+`yolo-rs` now also decodes `output1` and the trailing mask coefficients when you run a segmentation-style export through the example CLI.
 
 Example CLI usage:
 
@@ -64,7 +65,8 @@ Current scope:
 
 - Closed-set YOLOE detection exported to ONNX is supported.
 - Detection heads with extra mask coefficients can be decoded for boxes and classes when you provide the label list.
-- Open-vocabulary text prompts, visual prompts, offline prompt embeddings, and segmentation mask decoding are not implemented in this crate yet.
+- Segmentation-style exports can decode instance masks from `output1` and the mask coefficients stored in `output0`.
+- Runtime open-vocabulary text prompts and visual prompts are not implemented for ONNX in this crate. Ultralytics' exported ONNX graphs expose only the `images` input, so prompts must be fused into the model before export via `set_classes(...)`.
 
 ## Acknowledgements
 
