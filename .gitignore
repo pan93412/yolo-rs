@@ -8,6 +8,25 @@ devenv.local.nix
 # pre-commit
 .pre-commit-config.yaml
 
+# Editor settings
+.vscode/
+
+# Local Cargo config
+.cargo/
+
+# Python local environment
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local model weights
+/yoloe-26n-seg.pt
+/yoloe-v8s-seg.pt
+/yoloe-*.onnx
+/yoloe-*.onnx.data
+/mobileclip*.pt
+/mobileclip*.ts
+
 
 # Added by cargo
 

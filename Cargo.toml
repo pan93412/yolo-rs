@@ -17,6 +17,7 @@ image = "0.25.10"
 ndarray = "0.17"
 ort = "2.0.0-rc.12"
 thiserror = "2.0.18"
+tokenizers = "0.22.1"
 
 [workspace]
 members = [
