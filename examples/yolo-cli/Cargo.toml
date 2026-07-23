@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.102"
-clap = { version = "4.6.1", features = ["derive"] }
+anyhow = "1.0.104"
+clap = { version = "4.6.4", features = ["derive"] }
 image = "0.25.10"
 ort = { version = "2.0.0-rc.12" }
 raqote = { version = "0.8.5", default-features = false }
