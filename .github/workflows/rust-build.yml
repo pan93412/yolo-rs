@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: DeterminateSystems/determinate-nix-action@d96678350ffd6a456235832eb11e1c491589b7bb # v3.21.8
+      - uses: DeterminateSystems/determinate-nix-action@8d87e8d5e5b8a8309d4281094560f127d9a265f1 # v3.22.5
       - uses: DeterminateSystems/flakehub-cache-action@77c6bddd7d747943530aaa578c57f233ee5d920e # v3.21.8
 
       - name: Build
@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: DeterminateSystems/determinate-nix-action@d96678350ffd6a456235832eb11e1c491589b7bb # v3.21.8
+      - uses: DeterminateSystems/determinate-nix-action@8d87e8d5e5b8a8309d4281094560f127d9a265f1 # v3.22.5
       - uses: DeterminateSystems/flakehub-cache-action@77c6bddd7d747943530aaa578c57f233ee5d920e # v3.21.8
 
       - name: Build
