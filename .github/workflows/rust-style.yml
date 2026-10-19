@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: DeterminateSystems/determinate-nix-action@d96678350ffd6a456235832eb11e1c491589b7bb # v3.21.8
-      - uses: DeterminateSystems/flakehub-cache-action@77c6bddd7d747943530aaa578c57f233ee5d920e # v3.21.8
+      - uses: DeterminateSystems/flakehub-cache-action@1e32af7023570b86600346bf88feacc99b18ceca # v3.23.2
 
       - name: Check formatting
         run: nix develop --command cargo fmt --check
@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: DeterminateSystems/determinate-nix-action@d96678350ffd6a456235832eb11e1c491589b7bb # v3.21.8
-      - uses: DeterminateSystems/flakehub-cache-action@77c6bddd7d747943530aaa578c57f233ee5d920e # v3.21.8
+      - uses: DeterminateSystems/flakehub-cache-action@1e32af7023570b86600346bf88feacc99b18ceca # v3.23.2
 
       - name: Check formatting
         run: nix develop --command cargo clippy --all-targets --all-features -- --deny warnings
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: DeterminateSystems/determinate-nix-action@d96678350ffd6a456235832eb11e1c491589b7bb # v3.21.8
-      - uses: DeterminateSystems/flakehub-cache-action@77c6bddd7d747943530aaa578c57f233ee5d920e # v3.21.8
+      - uses: DeterminateSystems/flakehub-cache-action@1e32af7023570b86600346bf88feacc99b18ceca # v3.23.2
 
       - name: Check formatting
         working-directory: examples/yolo-cli
