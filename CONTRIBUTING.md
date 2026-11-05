@@ -23,3 +23,16 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features --locked -- --deny warnings
 cargo test --workspace --locked
 ```
+
+## Benchmarks
+
+`benches/inference.rs` times preprocessing, and inference with NMS for each ONNX model listed in
+`YOLO_BENCH_MODELS` (comma-separated):
+
+```sh
+YOLO_BENCH_MODELS=examples/yolo-cli/models/yolo11x.onnx cargo bench --bench inference
+```
+
+The Benchmark workflow runs it every Monday and by hand, with YOLO11x and the newest YOLO family in
+ultralytics/assets, which it exports with `nix develop .#export -c yolo export … end2end=False`.
+The results are in the run's summary.

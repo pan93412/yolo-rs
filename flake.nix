@@ -73,6 +73,19 @@
               RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
             };
           };
+
+          # `yolo export` for the Benchmark workflow's models.
+          export = pkgs.mkShell {
+            packages = [
+              (pkgs.python3.withPackages (p: [
+                # Its tests download datasets, which the build sandbox can't reach.
+                (p.ultralytics.overridePythonAttrs { doCheck = false; })
+                p.onnx
+                p.onnxslim
+                p.onnxruntime
+              ]))
+            ];
+          };
         }
       );
     };
