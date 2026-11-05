@@ -1,0 +1,23 @@
+# Change files in .changeset/ and release pull requests (RELEASING.md).
+[package]
+versioned_files = [
+  "Cargo.toml",
+  { path = "Cargo.lock", dependency = "yolo-rs" },
+  { path = "examples/yolo-cli/Cargo.toml", dependency = "yolo-rs" },
+]
+changelog = "CHANGELOG.md"
+
+[changes]
+ignore_conventional_commits = true
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows]]
+name = "document-change"
+
+[[workflows.steps]]
+type = "CreateChangeFile"

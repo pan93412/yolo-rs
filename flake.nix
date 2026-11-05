@@ -65,6 +65,7 @@
               rust-analyzer
 
               nixfmt
+              knope
             ];
 
             env = {
