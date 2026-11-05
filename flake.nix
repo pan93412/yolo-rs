@@ -74,7 +74,7 @@
             };
           };
 
-          # `yolo export` for the Benchmark workflow's models.
+          # `yolo export` for the Models workflow.
           export = pkgs.mkShell {
             packages = [
               (pkgs.python3.withPackages (p: [

@@ -1,0 +1,29 @@
+name: YOLO model
+description: >-
+  Exports an Ultralytics model to ONNX with end2end=False, the [1, 84, 8400] output yolo-rs reads,
+  in the export dev shell. The ONNX file is cached by model and flake.lock, which pins ultralytics.
+inputs:
+  model:
+    description: The model, as Ultralytics names its weights (yolo11x).
+    required: true
+outputs:
+  path:
+    description: The ONNX file.
+    value: ${{ runner.temp }}/models/${{ inputs.model }}.onnx
+runs:
+  using: composite
+  steps:
+    - id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/models/${{ inputs.model }}.onnx
+        key: yolo-onnx-${{ inputs.model }}-end2end-false-${{ hashFiles('flake.lock') }}
+    # Ultralytics downloads the weights from its own GitHub releases.
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        MODEL: ${{ inputs.model }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/models"
+        cd "$RUNNER_TEMP/models"
+        nix develop "$GITHUB_WORKSPACE#export" -c yolo export model="$MODEL.pt" format=onnx end2end=False
