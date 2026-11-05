@@ -4,7 +4,7 @@
 stable Cargo stops at the first command (``config profile `release` is not valid``). Either:
 
 - run everything inside `nix develop`, which provides the toolchain CI uses (see "Toolchain"); or
-- with rustup, run `rustup toolchain install nightly --component rustfmt clippy` and then
+- with rustup, run `rustup toolchain install nightly --component rustfmt,clippy` and then
   `rustup override set nightly` in your clone.
 
 Projects that depend on yolo-rs from crates.io are not affected: they build it with stable Rust.
