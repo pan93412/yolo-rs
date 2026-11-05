@@ -36,7 +36,10 @@ section becomes the release notes as it is.
 ## One-time setup
 
 - **crates.io trusted publishing:** in the crate's settings on crates.io, add a trusted publisher
-  for `pan93412/yolo-rs` with the workflow `release.yml`. No crates.io token is stored in GitHub.
+  for `pan93412/yolo-rs` with the workflow `release.yml` and the environment `crates-io`. No
+  crates.io token is stored in GitHub.
+- **`crates-io` environment:** in the repository's Settings → Environments, with deployment
+  branches limited to `master`. It holds no secrets or variables.
 - **`RELEASE_TOKEN`:** a fine-grained token for this repository with *Contents* and *Pull
   requests* read and write, stored as an Actions secret. A pull request opened with the default
   `GITHUB_TOKEN` starts no workflow, so its required checks would never run.
