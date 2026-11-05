@@ -9,7 +9,7 @@ to certify that you wrote it or otherwise have the right to submit it under the 
 git commit -s
 ```
 
-CI rejects pull requests whose commits lack a `Signed-off-by` line matching the author. To sign off
+The DCO check rejects pull requests whose commits lack a `Signed-off-by` line matching the author. To sign off
 commits you already made, run `git rebase --signoff master`. Commit messages follow
 [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `ci:`,
 `docs:`).
