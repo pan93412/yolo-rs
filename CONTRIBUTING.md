@@ -1,5 +1,14 @@
 # Contributing
 
+**Build this repository with nightly Rust.** `.cargo/config.toml` uses nightly-only settings, so
+stable Cargo stops at the first command (``config profile `release` is not valid``). Either:
+
+- run everything inside `nix develop`, which provides the toolchain CI uses (see "Toolchain"); or
+- with rustup, run `rustup toolchain install nightly --component rustfmt,clippy` and then
+  `rustup override set nightly` in your clone.
+
+Projects that depend on yolo-rs from crates.io are not affected: they build it with stable Rust.
+
 ## Developer Certificate of Origin
 
 This project uses the [Developer Certificate of Origin 1.1](DCO), not a CLA. Sign off every commit
@@ -21,8 +30,9 @@ rust-src and rust-analyzer. `flake.lock` is the only place the compiler version 
 `rust-toolchain.toml`. Renovate updates the lock file weekly, which moves the nightly forward.
 
 Nightly is needed for the formatting options in `rustfmt.toml` and for `-Zthreads=8` and
-`trim-paths` in `.cargo/config.toml`. The library itself builds on stable Rust; those settings only
-apply inside this repository.
+`trim-paths` in `.cargo/config.toml`. Cargo reads that file for every command in this repository,
+which is why stable Rust cannot build it here. The published crate does not include it and builds
+on stable Rust.
 
 ## Lints and formatting
 
