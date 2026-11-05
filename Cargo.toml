@@ -13,7 +13,8 @@ exclude = [".github", "examples", ".envrc", "devenv*"]
 
 [dependencies]
 arcstr = "1.2.0"
-image = "0.25.10"
+# Only `DynamicImage` and resizing; decoding is up to the caller.
+image = { version = "0.25.10", default-features = false }
 ndarray = "0.17"
 ort = "2.0.0-rc.12"
 thiserror = "2.0.21"

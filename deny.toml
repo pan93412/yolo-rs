@@ -7,10 +7,7 @@ all-features = true
 # RustSec advisories (unmaintained, unsound and vulnerable crates) fail the check; so do yanked
 # versions. Give every ignored advisory its reason here.
 yanked = "deny"
-ignore = [
-  # paste is unmaintained but sound; image pulls it in through its EXR and AVIF codecs.
-  { id = "RUSTSEC-2024-0436", reason = "a proc macro reached only through image's codecs; no fix upstream" },
-]
+ignore = []
 
 [licenses]
 # OSI-approved licences only.

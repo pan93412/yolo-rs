@@ -1,3 +1,5 @@
+//! Detects objects in a picture with a YOLO model and shows the boxes in a window.
+
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -61,16 +63,26 @@ fn main() -> Result<()> {
     let result = inference(&mut model, input.view())?;
     tracing::info!("Inference took {:?}", now.elapsed());
 
-    tracing::debug!("Drawing bounding boxes…");
-    let (img_width, img_height) = (original_img.width(), original_img.height());
+    let overlay = draw_boxes(&original_img, result)?;
+    show(original_img, overlay)
+}
 
-    let mut dt = DrawTarget::new(img_width as _, img_height as _);
+/// Draws a box around each detected entity on a transparent layer the size of `image`.
+fn draw_boxes(
+    image: &image::DynamicImage,
+    entities: Vec<YoloEntityOutput>,
+) -> Result<show_image::Image> {
+    tracing::debug!("Drawing bounding boxes…");
+    let mut dt = DrawTarget::new(
+        i32::try_from(image.width()).context("image too wide")?,
+        i32::try_from(image.height()).context("image too tall")?,
+    );
 
     for YoloEntityOutput {
         bounding_box: bbox,
         label,
         confidence,
-    } in result
+    } in entities
     {
         tracing::info!(
             "Found entity {:?} with confidence {:.2} at ({:.2}, {:.2}) - ({:.2}, {:.2})",
@@ -117,9 +129,13 @@ fn main() -> Result<()> {
         );
     }
 
-    let overlay: show_image::Image = dt.into();
+    Ok(dt.into())
+}
 
+/// Shows `image` with `overlay` on top until Escape is pressed.
+fn show(image: image::DynamicImage, overlay: show_image::Image) -> Result<()> {
     tracing::info!("Displaying image…");
+    let (img_width, img_height) = (image.width(), image.height());
     let window = show_image::context()
         .run_function_wait(move |context| -> Result<_, String> {
             let mut window = context
@@ -133,7 +149,7 @@ fn main() -> Result<()> {
                 .map_err(|e| e.to_string())?;
             window.set_image(
                 "baseball",
-                &original_img.as_image_view().map_err(|e| e.to_string())?,
+                &image.as_image_view().map_err(|e| e.to_string())?,
             );
             window.set_overlay(
                 "yolo",
