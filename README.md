@@ -35,19 +35,18 @@ CI benchmarks every tested model on a GitHub-hosted Arm runner (`ubuntu-26.04-ar
 | YOLO12x | 1.24 s |
 | YOLO26x | 1.08 s |
 
-Preparing the input (resizing and normalising the image) takes about 11 ms. On a MacBook Pro (2024) with M3 Max and CoreML, YOLO11x takes about **57 ms** per image.
+Preparing the input (resizing and normalising the image) takes about 11 ms.
 
-<details>
-    <summary>yolo-cli inference logs on MacBook Pro (2024) with M3 Max</summary>
+On a MacBook Pro (2024) with M3 Max, the median of 20 runs after 5 warm-up runs:
 
-    2025-07-11T13:15:07.344683Z  INFO example_yolo_gui: Inference took 56.944167ms
-    2025-07-11T13:15:07.344765Z  INFO example_yolo_gui: Found entity "person" with confidence 0.91 at (23.53, 325.31) - (127.34, 480.19)
-    2025-07-11T13:15:07.344813Z  INFO example_yolo_gui: Found entity "person" with confidence 0.91 at (268.38, 285.00) - (349.62, 480.00)
-    2025-07-11T13:15:07.344843Z  INFO example_yolo_gui: Found entity "person" with confidence 0.89 at (106.31, 373.31) - (238.69, 480.19)
-    2025-07-11T13:15:07.344865Z  INFO example_yolo_gui: Found entity "baseball glove" with confidence 0.75 at (210.94, 409.50) - (240.06, 453.00)
-    2025-07-11T13:15:07.344875Z  INFO example_yolo_gui: Found entity "person" with confidence 0.66 at (20.17, 276.28) - (64.45, 364.97)
-    2025-07-11T13:15:07.344890Z  INFO example_yolo_gui: Found entity "baseball bat" with confidence 0.50 at (222.94, 372.84) - (275.81, 381.66)
-</details>
+| Model | CoreML | CPU |
+| --- | --- | --- |
+| YOLOv8x | 28 ms | 374 ms |
+| YOLO11x | 45 ms | 322 ms |
+| YOLO12x | 164 ms | 373 ms |
+| YOLO26x | 47 ms | 345 ms |
+
+Times cover `inference` (the model and non-maximum suppression) on [the test picture](examples/yolo-cli/data/baseball.jpg), with ONNX Runtime from `ort` 2.0.0-rc.12 and models exported by Ultralytics 8.4.51.
 
 ## Examples
 
