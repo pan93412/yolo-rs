@@ -37,4 +37,4 @@ This project is inspired by the [YOLOv8 example](https://github.com/pykeio/ort/t
 
 ## License
 
-This project is dual-licensed under the MIT License and Apache-2.0 LICENSE. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the [Apache License 2.0](LICENSE).

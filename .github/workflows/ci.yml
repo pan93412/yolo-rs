@@ -1,0 +1,64 @@
+name: CI
+
+# Pull requests and pushes to master run every job. `ci / ok` is the one check the branch rules
+# require, so adding or renaming a job needs no settings change.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/flake-checker-action@de924abd783455e8429c858962b9e43062d19da1 # v13
+      - uses: ./.github/actions/setup
+      - run: nix develop -c cargo fmt --all --check
+      - run: nix develop -c nixfmt --check flake.nix
+      - run: nix develop -c cargo clippy --workspace --all-targets --all-features --locked -- --deny warnings
+      - run: nix develop -c cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  test:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: nix develop -c cargo test --workspace --all-features --locked
+
+  workflows:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@92957199488000b908fdad19f63711000965d8f3 # v3.24.1
+      - run: nix shell nixpkgs#actionlint nixpkgs#shellcheck --command actionlint
+      - run: nix run nixpkgs#zizmor -- --offline --no-progress --min-severity medium .github
+
+  # The check the branch rules require.
+  ok:
+    name: ci / ok
+    if: always()
+    needs: [lint, test, workflows]
+    runs-on: ubuntu-slim
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
