@@ -135,14 +135,14 @@ fn draw_boxes(
 /// Shows `image` with `overlay` on top until Escape is pressed.
 fn show(image: image::DynamicImage, overlay: show_image::Image) -> Result<()> {
     tracing::info!("Displaying image…");
-    let (img_width, img_height) = (image.width(), image.height());
+    let size = [image.width(), image.height()];
     let window = show_image::context()
         .run_function_wait(move |context| -> Result<_, String> {
             let mut window = context
                 .create_window(
                     "ort + YOLOv8",
                     WindowOptions {
-                        size: Some([img_width, img_height]),
+                        size: Some(size),
                         ..WindowOptions::default()
                     },
                 )
