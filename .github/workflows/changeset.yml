@@ -1,0 +1,51 @@
+name: Changeset
+
+# A pull request whose title is feat, fix or perf, or marks a breaking change with !, adds a change
+# file in .changeset/ (`nix develop -c knope document-change`) or carries the label
+# `changelog: none`. The level in the file is the change's effect on users, not derived from the
+# title.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+# A title edit, a label and a push in a row leave only the last run.
+concurrency:
+  group: changeset-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changeset:
+    name: changeset
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+          NONE: "${{ contains(github.event.pull_request.labels.*.name, 'changelog: none') }}"
+        run: |
+          user_facing='^(feat|fix|perf)(\([^)]*\))?!?: |^[a-z]+(\([^)]*\))?!: '
+          files=$(git diff --name-only --diff-filter=AM "$BASE...$HEAD" -- '.changeset/*.md')
+          status=0
+          for f in $files; do
+            if ! grep -qxE 'default: (major|minor|patch)' "$f"; then
+              echo "::error file=$f::needs 'default: major', 'minor' or 'patch' in its front matter"
+              status=1
+            fi
+            if ! grep -qE '^# .+' "$f"; then
+              echo "::error file=$f::needs a '# summary' heading"
+              status=1
+            fi
+          done
+          if [ -z "$files" ] && [ "$NONE" != true ] && [[ "$TITLE" =~ $user_facing ]]; then
+            echo "::error::'$TITLE' changes what users see: add a change file with 'nix develop -c knope document-change', or label the pull request 'changelog: none'"
+            status=1
+          fi
+          exit $status

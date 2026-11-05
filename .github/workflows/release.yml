@@ -1,0 +1,110 @@
+name: Release
+
+# Run by hand: knope turns the change files in .changeset/ into the next CHANGELOG.md section and
+# version, and opens `chore(release): vX.Y.Z` from release/next. Once that pull request is merged,
+# the push to master publishes the crate to crates.io, then tags the merge commit and creates the
+# GitHub release with the CHANGELOG.md section as its notes (RELEASING.md).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version instead of the one the change files give (0.3.0); empty for theirs"
+        default: ""
+      prerelease:
+        description: "Pre-release label (rc, beta) for X.Y.Z-<label>.N; empty for a normal release"
+        default: ""
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@92957199488000b908fdad19f63711000965d8f3 # v3.24.1
+      - id: knope
+        env:
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          args=()
+          [ -z "$VERSION" ] || args+=(--override-version "$VERSION")
+          [ -z "$PRERELEASE" ] || args+=(--prerelease-label "$PRERELEASE")
+          nix develop -c knope prepare-release "${args[@]}"
+          echo "version=$(nix develop -c cargo metadata --no-deps --locked --format-version 1 | jq -r '.packages[] | select(.name == "yolo-rs") | .version')" >> "$GITHUB_OUTPUT"
+      - env:
+          # A pull request opened with GITHUB_TOKEN starts no workflow, so its checks never run;
+          # RELEASE_TOKEN, a fine-grained token with contents and pull requests write, avoids that.
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          VERSION: ${{ steps.knope.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c release/next
+          git add -A
+          git commit -s -m "chore(release): v$VERSION"
+          git push --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" release/next
+          {
+            echo "Merging this publishes yolo-rs $VERSION to crates.io and tags the merge commit v$VERSION. Edit CHANGELOG.md on this branch first if the section should read differently."
+            echo
+            awk -v v="$VERSION" '$1 == "##" && $2 == v { on = 1; next } on && $1 == "##" { exit } on' CHANGELOG.md
+          } > "$RUNNER_TEMP/body.md"
+          if gh pr view release/next --json state --jq .state 2>/dev/null | grep -qx OPEN; then
+            gh pr edit release/next --title "chore(release): v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base master --head release/next --title "chore(release): v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+  publish:
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.event.head_commit.message, 'chore(release): v')
+    runs-on: ubuntu-26.04-arm
+    permissions:
+      contents: write
+      # crates.io trusted publishing
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@92957199488000b908fdad19f63711000965d8f3 # v3.24.1
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUBJECT: ${{ github.event.head_commit.message }}
+        run: |
+          version=$(nix develop -c cargo metadata --no-deps --locked --format-version 1 | jq -r '.packages[] | select(.name == "yolo-rs") | .version')
+          if [ "${SUBJECT%%$'\n'*}" != "chore(release): v$version" ] && [[ "${SUBJECT%%$'\n'*}" != "chore(release): v$version (#"* ]]; then
+            echo "::error::the commit says '${SUBJECT%%$'\n'*}' but Cargo.toml has $version"
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --silent 2>/dev/null; then
+            echo "::error::v$version is already tagged"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+        id: auth
+      - env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: nix develop -c cargo publish --locked -p yolo-rs
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '$1 == "##" && $2 == v { on = 1; next } on && $1 == "##" { exit } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          args=()
+          [[ "$VERSION" != *-* ]] || args+=(--prerelease)
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${args[@]}"
