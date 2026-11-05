@@ -32,6 +32,10 @@ section becomes the release notes as it is.
    to the new version. Edit `CHANGELOG.md` on that branch if the section should read differently.
 3. Squash-merge it. The push to `master` publishes the crate to crates.io, then tags the merge
    commit `vX.Y.Z` and creates the GitHub release with the section as its notes.
+4. The CLI workflow then builds yolo-cli, which has the crate's version, for Linux (x86_64,
+   arm64) and macOS (arm64), signs and notarizes the macOS binary, and attaches
+   `yolo-cli-<target>.tar.gz`, `SHA256SUMS` and a build provenance attestation for each
+   archive to the release. Approve the `apple` deployment when it asks.
 
 ## One-time setup
 
@@ -43,3 +47,16 @@ section becomes the release notes as it is.
 - **`RELEASE_TOKEN`:** a fine-grained token for this repository with *Contents* and *Pull
   requests* read and write, stored as an Actions secret. A pull request opened with the default
   `GITHUB_TOKEN` starts no workflow, so its required checks would never run.
+- **`apple` environment:** in Settings → Environments, with deployment branches limited to
+  `master` and you as a required reviewer. Its secrets sign and notarize the macOS yolo-cli:
+  - `APPLE_DEVELOPER_ID_P12`: a *Developer ID Application* certificate (developer.apple.com →
+    Certificates) exported from Keychain Access with its private key as a `.p12`, then
+    `base64 -i developer-id.p12 | pbcopy`.
+  - `APPLE_DEVELOPER_ID_P12_PASSWORD`: the password chosen when exporting it.
+  - `APPLE_API_KEY`: an App Store Connect API key (App Store Connect → Users and Access →
+    Integrations → Team Keys, with the *Developer* role) encoded by
+    `rcodesign encode-app-store-connect-api-key <issuer-id> <key-id> AuthKey_<key-id>.p8`; get
+    rcodesign with `nix shell nixpkgs#rcodesign`. Paste the JSON it prints.
+
+  Run the **CLI** workflow by hand from `master` to check them: it signs and notarizes the macOS
+  binary without releasing anything.

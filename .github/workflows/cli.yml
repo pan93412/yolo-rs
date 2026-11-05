@@ -1,0 +1,160 @@
+name: CLI
+
+# Builds yolo-cli for Linux (x86_64, arm64) and macOS (arm64). A pull request that touches it only
+# builds and checks the binaries. Run by hand, it also signs and notarizes the macOS one, to try the
+# Apple credentials. The Release workflow calls it with the version it published, and the archives
+# go on that GitHub release (RELEASING.md).
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cli.yml
+      - examples/yolo-cli/**
+      - Cargo.lock
+      - flake.lock
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: "The version just released, without the v (0.3.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest Ubuntu GitHub runs, so the binaries need only glibc 2.35.
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+          - target: aarch64-apple-darwin
+            runner: macos-26
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@92957199488000b908fdad19f63711000965d8f3 # v3.24.1
+      - if: runner.os == 'Linux'
+        # The dev shell's C toolchain links against the glibc in /nix/store, which other machines
+        # lack: take only Rust from the flake and link with the runner's cc.
+        run: |
+          # shellcheck disable=SC2016 # the dev shell expands it
+          rust=$(nix develop -c sh -c 'dirname "$(command -v cargo)"')
+          PATH="$rust:$PATH" cargo build --release --locked -p yolo-cli
+      - if: runner.os == 'macOS'
+        # On macOS the dev shell links against the system's libraries only.
+        run: nix develop -c cargo build --release --locked -p yolo-cli
+      - name: Check that the binary runs without Nix
+        run: |
+          bin=target/release/yolo-cli
+          if [ "$RUNNER_OS" = Linux ]; then
+            (readelf -lW "$bin"; readelf -dW "$bin") > "$RUNNER_TEMP/links.txt"
+            echo "Needs $(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
+          else
+            otool -L "$bin" > "$RUNNER_TEMP/links.txt"
+          fi
+          cat "$RUNNER_TEMP/links.txt"
+          if grep -F /nix/store "$RUNNER_TEMP/links.txt"; then
+            echo "::error::$bin refers to /nix/store"
+            exit 1
+          fi
+          env -i "$bin" --version
+          # ONNX Runtime starts before the model loads, so this fails on the model alone.
+          if env -i "$bin" missing.onnx examples/yolo-cli/data/baseball.jpg > "$RUNNER_TEMP/run.txt" 2>&1; then
+            echo "::error::yolo-cli ran without a model"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/run.txt"
+          grep -q 'failed to load model' "$RUNNER_TEMP/run.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: yolo-cli-${{ matrix.target }}
+          path: target/release/yolo-cli
+          if-no-files-found: error
+
+  notarize:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-26.04-arm
+    # Holds the Developer ID certificate and the App Store Connect API key (RELEASING.md).
+    environment: apple
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@92957199488000b908fdad19f63711000965d8f3 # v3.24.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: yolo-cli-aarch64-apple-darwin
+          path: ${{ runner.temp }}/bin
+      - env:
+          APPLE_DEVELOPER_ID_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          umask 077
+          base64 -d <<< "$APPLE_DEVELOPER_ID_P12" > "$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$APPLE_DEVELOPER_ID_P12_PASSWORD" > "$RUNNER_TEMP/p12-password"
+          printf '%s' "$APPLE_API_KEY" > "$RUNNER_TEMP/api-key.json"
+          nix build --inputs-from . nixpkgs#rcodesign --out-link "$RUNNER_TEMP/rcodesign"
+          rcodesign="$RUNNER_TEMP/rcodesign/bin/rcodesign"
+          bin="$RUNNER_TEMP/bin/yolo-cli"
+          # Developer ID, a timestamp and the hardened runtime, as notarization requires.
+          "$rcodesign" sign --for-notarization \
+            --binary-identifier io.github.pan93412.yolo-cli \
+            --p12-file "$RUNNER_TEMP/developer-id.p12" \
+            --p12-password-file "$RUNNER_TEMP/p12-password" \
+            "$bin"
+          # A bare Mach-O binary takes no stapled ticket: Gatekeeper looks it up online.
+          "$rcodesign" notary-submit --wait --api-key-file "$RUNNER_TEMP/api-key.json" "$bin"
+          rm "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/p12-password" "$RUNNER_TEMP/api-key.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: yolo-cli-aarch64-apple-darwin
+          path: ${{ runner.temp }}/bin/yolo-cli
+          if-no-files-found: error
+          overwrite: true
+
+  upload:
+    if: inputs.version != ''
+    needs: notarize
+    runs-on: ubuntu-26.04-arm
+    permissions:
+      contents: write
+      # Build provenance attestations
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: yolo-cli-*
+          path: ${{ runner.temp }}/artifacts
+      - run: |
+          mkdir dist
+          for dir in "$RUNNER_TEMP"/artifacts/yolo-cli-*; do
+            # Without the version, so releases/latest/download/<name>.tar.gz always works.
+            name="${dir##*/}"
+            mkdir "$RUNNER_TEMP/$name"
+            install -m 755 "$dir/yolo-cli" "$RUNNER_TEMP/$name/"
+            cp LICENSE examples/yolo-cli/README.md "$RUNNER_TEMP/$name/"
+            tar -czf "dist/$name.tar.gz" -C "$RUNNER_TEMP" "$name"
+          done
+          (cd dist && sha256sum -- *.tar.gz > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release upload "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY"
