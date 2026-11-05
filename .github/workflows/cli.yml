@@ -28,11 +28,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The oldest Ubuntu GitHub runs, so the binaries need only glibc 2.35.
+          # ort's ONNX Runtime needs glibc 2.38 and GCC 14's libstdc++, which 22.04 lacks; on 24.04
+          # the binaries need glibc 2.39.
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             runner: macos-26
     runs-on: ${{ matrix.runner }}

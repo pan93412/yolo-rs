@@ -65,7 +65,7 @@ Or emit it from your binary's build script: `println!("cargo:rustc-link-arg=-fap
 
 ### Try it without Rust
 
-Each [release](https://github.com/pan93412/yolo-rs/releases/latest) has yolo-cli built for Linux (x86_64 and arm64, glibc 2.35 or later) and macOS (Apple silicon, signed and notarized). They run on the CPU, and on macOS also with CoreML:
+Each [release](https://github.com/pan93412/yolo-rs/releases/latest) has yolo-cli built for Linux (x86_64 and arm64, with glibc 2.39 and GCC 14's libstdc++ or later, as on Ubuntu 24.04 or Debian 13) and macOS (Apple silicon, signed and notarized). They run on the CPU, and on macOS also with CoreML:
 
 ```shell
 curl -L https://github.com/pan93412/yolo-rs/releases/latest/download/yolo-cli-aarch64-apple-darwin.tar.gz | tar -xz
