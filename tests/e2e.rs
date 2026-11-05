@@ -5,9 +5,9 @@
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::error::Error;
     use std::path::Path;
 
+    use anyhow::{Context, Result};
     use yolo_rs::model::YoloModelSession;
     use yolo_rs::{BoundingBox, image_to_yolo_input_tensor, inference};
 
@@ -29,7 +29,7 @@ mod tests {
     }
 
     #[test]
-    fn finds_the_players_on_baseball_jpg() -> Result<(), Box<dyn Error>> {
+    fn finds_the_players_on_baseball_jpg() -> Result<()> {
         let Ok(model_path) = env::var("YOLO_E2E_MODEL") else {
             eprintln!("YOLO_E2E_MODEL is not set; nothing to check");
             return Ok(());
@@ -37,11 +37,15 @@ mod tests {
 
         let image_path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/yolo-cli/data/baseball.jpg");
-        let image = image::open(&image_path)?;
+        let image = image::open(&image_path)
+            .with_context(|| format!("failed to open {}", image_path.display()))?;
         let input = image_to_yolo_input_tensor(&image);
-        let mut model = YoloModelSession::from_filename_v8(&model_path)
-            .map_err(|error| format!("failed to load {model_path}: {error}"))?;
-        let found = inference(&mut model, input.view())?;
+        let environment = ort::init()
+            .build()
+            .context("failed to initialize ONNX Runtime")?;
+        let mut model = YoloModelSession::from_filename_v8(&environment, &model_path)
+            .with_context(|| format!("failed to load {model_path}"))?;
+        let found = inference(&mut model, input.view()).context("inference failed")?;
 
         for (label, expected) in EXPECTED {
             let best = found

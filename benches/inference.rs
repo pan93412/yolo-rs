@@ -2,21 +2,21 @@
 //! `examples/yolo-cli/data/baseball.jpg`. Without it, only preprocessing is timed.
 
 use std::env;
-use std::error::Error;
 use std::hint::black_box;
 use std::path::Path;
 
+use anyhow::{Context, Result};
 use criterion::{Criterion, SamplingMode};
 use image::DynamicImage;
 use yolo_rs::model::YoloModelSession;
 use yolo_rs::{YoloInput, image_to_yolo_input_tensor, inference};
 
 // Our own `main` instead of `criterion_main!`, so a failure is returned rather than a panic.
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let image_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/yolo-cli/data/baseball.jpg");
     let image = image::open(&image_path)
-        .map_err(|error| format!("failed to open {}: {error}", image_path.display()))?;
+        .with_context(|| format!("failed to open {}", image_path.display()))?;
     let input = image_to_yolo_input_tensor(&image);
     let models = load_models(&input)?;
 
@@ -51,16 +51,19 @@ fn time_inference(
 
 /// Loads every model in `YOLO_BENCH_MODELS` and runs it once, so a broken one fails before any
 /// timing starts; inside the timing loop the result only goes to `black_box`.
-fn load_models(input: &YoloInput) -> Result<Vec<(String, YoloModelSession)>, Box<dyn Error>> {
+fn load_models(input: &YoloInput) -> Result<Vec<(String, YoloModelSession)>> {
+    let environment = ort::init()
+        .build()
+        .context("failed to initialize ONNX Runtime")?;
     let models = env::var("YOLO_BENCH_MODELS").unwrap_or_default();
     models
         .split(',')
         .filter(|path| !path.is_empty())
         .map(|path| {
-            let mut model = YoloModelSession::from_filename_v8(path)
-                .map_err(|error| format!("failed to load {path}: {error}"))?;
+            let mut model = YoloModelSession::from_filename_v8(&environment, path)
+                .with_context(|| format!("failed to load {path}"))?;
             inference(&mut model, input.view())
-                .map_err(|error| format!("inference with {path} failed: {error}"))?;
+                .with_context(|| format!("inference with {path} failed"))?;
             let name = Path::new(path).file_stem().map_or_else(
                 || path.to_owned(),
                 |stem| stem.to_string_lossy().into_owned(),

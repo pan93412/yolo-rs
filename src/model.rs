@@ -139,14 +139,19 @@ impl YoloModelSession {
     /// You can use this function to load a YOLO v8 (v11) model from a file.
     /// The `filename` is the path to the ONNX model file.
     ///
+    /// The session is created in `environment`, which you get from [`ort::init`].
+    ///
     /// You can export the ONNX model file according to
     /// [Ultralytics' manual](https://docs.ultralytics.com/integrations/onnx/).
     ///
     /// # Errors
     ///
     /// Fails when ONNX Runtime cannot create the session or load the file.
-    pub fn from_filename_v8(filename: impl AsRef<Path>) -> Result<Self, YoloError> {
-        let session = ort::session::Session::builder()
+    pub fn from_filename_v8(
+        environment: &ort::environment::Environment,
+        filename: impl AsRef<Path>,
+    ) -> Result<Self, YoloError> {
+        let session = ort::session::Session::builder(environment)
             .map_err(YoloError::OrtSessionBuildError)?
             .commit_from_file(filename)
             .map_err(YoloError::OrtSessionLoadError)?;
