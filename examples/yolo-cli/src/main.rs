@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use ort::execution_providers::{CUDAExecutionProvider, CoreMLExecutionProvider};
 use raqote::{DrawOptions, DrawTarget, LineJoin, PathBuilder, SolidSource, Source, StrokeStyle};
 use show_image::{AsImageView, WindowOptions, event};
 use yolo_rs::{YoloEntityOutput, image_to_yolo_input_tensor, inference, model};
@@ -27,14 +26,14 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     tracing::debug!("Initializing ONNX runtime…");
-    ort::init()
-        .with_execution_providers([
-            CUDAExecutionProvider::default().build(),
-            CoreMLExecutionProvider::default().build(),
-        ])
-        .commit()
-        .then_some(())
-        .context("failed to commit ONNX Runtime")?;
+    // ONNX Runtime falls back to the CPU; ort's `cuda` feature adds `ort::ep::CUDA`.
+    #[cfg(target_os = "macos")]
+    let builder = ort::init().with_execution_providers([ort::ep::CoreML::default().build()]);
+    #[cfg(not(target_os = "macos"))]
+    let builder = ort::init();
+    let environment = builder
+        .build()
+        .context("failed to initialize ONNX Runtime")?;
 
     tracing::info!("Loading image {:?}…", args.picture_path.display());
     let original_img = image::open(&args.picture_path)
@@ -42,8 +41,9 @@ fn main() -> Result<()> {
 
     tracing::info!("Loading models {:?}…", args.model_path.display());
     let mut model = {
-        let mut model = model::YoloModelSession::from_filename_v8(&args.model_path)
-            .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
+        let mut model =
+            model::YoloModelSession::from_filename_v8(&environment, &args.model_path)
+                .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
 
         model.iou_threshold = args.iou_threshold;
         model.probability_threshold = args.probability_threshold;

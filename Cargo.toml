@@ -15,7 +15,7 @@ exclude = [".github", "examples", ".envrc", "devenv*"]
 arcstr = "1.2.0"
 image = "0.25.10"
 ndarray = "0.17"
-ort = "2.0.0-rc.12"
+ort = "2.0.0-rc.15"
 thiserror = "2.0.21"
 
 [workspace]
