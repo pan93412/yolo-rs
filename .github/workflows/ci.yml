@@ -29,7 +29,8 @@ jobs:
       - uses: ./.github/actions/setup
       - run: nix develop -c cargo fmt --all --check
       - run: nix develop -c nixfmt --check flake.nix
-      - run: nix develop -c cargo clippy --workspace --all-targets --all-features --locked -- --deny warnings
+      - run: nix develop -c cargo lint
+      - run: nix develop -c cargo deny check
       - run: nix develop -c cargo doc --workspace --no-deps --locked
         env:
           RUSTDOCFLAGS: -D warnings
