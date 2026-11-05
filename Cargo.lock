@@ -2787,7 +2787,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "yolo-rs"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "arcstr",
  "image",
