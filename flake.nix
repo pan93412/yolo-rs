@@ -2,7 +2,7 @@
   description = "A Nix-flake-based Rust development environment";
 
   inputs = {
-    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -34,23 +34,19 @@
         );
     in
     {
-      overlays.default = final: prev: {
-        rustToolchain =
-          let
-            rust = prev.rust-bin;
-          in
-          if builtins.pathExists ./rust-toolchain.toml then
-            rust.fromRustupToolchainFile ./rust-toolchain.toml
-          else if builtins.pathExists ./rust-toolchain then
-            rust.fromRustupToolchainFile ./rust-toolchain
-          else
-            rust.stable.latest.default.override {
-              extensions = [
-                "rust-src"
-                "rustfmt"
-                "clippy"
-              ];
-            };
+      overlays.default = final: _: {
+        # The newest nightly in the locked rust-overlay that has all these components.
+        rustToolchain = final.rust-bin.selectLatestNightlyWith (
+          toolchain:
+          toolchain.minimal.override {
+            extensions = [
+              "rustfmt"
+              "clippy"
+              "rust-src"
+              "rust-analyzer"
+            ];
+          }
+        );
       };
 
       devShells = forEachSupportedSystem (
@@ -62,9 +58,10 @@
               openssl
               pkg-config
               cargo-edit
-              rust-analyzer
+              cargo-deny
 
               nixfmt
+              knope
             ];
 
             env = {
@@ -72,6 +69,27 @@
               RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
             };
           };
+
+          # `yolo export` for the Models workflow.
+          export =
+            let
+              python = pkgs.python3;
+            in
+            pkgs.mkShell {
+              packages = [
+                (python.withPackages (p: [
+                  # Its tests download datasets, which the build sandbox can't reach.
+                  (p.ultralytics.overridePythonAttrs { doCheck = false; })
+                  p.onnx
+                  p.onnxslim
+                  p.onnxruntime
+                ]))
+              ];
+              # What an export depends on; the Models workflow caches the ONNX files under it.
+              passthru.exportKey =
+                with python.pkgs;
+                "ultralytics-${ultralytics.version}-torch-${torch.version}-onnx-${onnx.version}-onnxslim-${onnxslim.version}";
+            };
         }
       );
     };

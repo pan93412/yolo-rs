@@ -1,0 +1,26 @@
+# Cargo and rustc settings. The nightly-only entries are explained in CONTRIBUTING.md, "Toolchain".
+
+[alias]
+# The exact lint run CI does.
+lint = "clippy --workspace --all-targets --all-features --locked -- -D warnings"
+
+[profile.release]
+# No build-host paths in release binaries (reproducible builds).
+trim-paths = "all"
+
+[build]
+# Parallel compiler front end (nightly).
+rustflags = ["-Zthreads=8"]
+
+[target.'cfg(target_vendor = "apple")']
+# ONNX Runtime's Apple build calls `__isPlatformVersionAtLeast`, which only the compiler runtime
+# has. Target rustflags replace `build.rustflags`, so `-Zthreads=8` is repeated.
+rustflags = ["-Zthreads=8", "-Clink-arg=-fapple-link-rtlib"]
+
+[registry]
+# Do not resolve crate versions published less than a week ago.
+# Urgent security fix: CARGO_REGISTRY_GLOBAL_MIN_PUBLISH_AGE="0 days" cargo update -p <crate>
+global-min-publish-age = "7 days"
+
+[resolver]
+incompatible-publish-age = "deny"

@@ -1,22 +1,27 @@
 # yolo-cli
 
-Mostly referenced from <https://github.com/pykeio/ort/tree/main/examples/yolov8>.
+Detects objects in a picture and saves a copy with a box around each one. Mostly referenced from <https://github.com/pykeio/ort/tree/main/examples/yolov8>.
 
 ## Usage
 
 ```bash
-cargo run --release models/yolo11x.onnx data/baseball.jpg
+cargo run --release -- models/yolo11x.onnx data/baseball.jpg --output detected.png
 ```
 
 where:
 
-- `models/yolo11x.onnx` is the path to the ONNX model file.
-    - You can export the model according to [Ultralytics' manual](https://docs.ultralytics.com/integrations/onnx/).
-- `data/baseball.jpg` is the path to the image file.
+- `models/yolo11x.onnx` is the YOLO model exported to ONNX. Any version in the [supported models](../../README.md#supported-models) table works.
+- `data/baseball.jpg` is the picture to detect objects in (JPEG or PNG).
+- `--output` (`-o`) is where the picture with the boxes goes; `detected.png` by default.
 
-## Downloading models
+The detections are also logged, with their labels, confidence and coordinates. `--probability-threshold` and `--iou-threshold` change the thresholds.
+
+## Exporting a model
+
+With [Ultralytics](https://docs.ultralytics.com/integrations/onnx/) installed:
 
 ```shell
 mkdir models
-wget -O models/yolo11x.onnx https://huggingface.co/pan93412/yolo-v11-onnx/resolve/main/yolo11x.onnx
+yolo export model=yolo11x.pt format=onnx
+mv yolo11x.onnx models/
 ```

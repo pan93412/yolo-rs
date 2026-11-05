@@ -53,13 +53,6 @@
         "/^ort(-|$)/"
       ],
       "groupName": "ort"
-    },
-    {
-      "description": "show-image 0.14.1 does not build on macOS; examples/yolo-cli pins 0.14.0.",
-      "matchPackageNames": [
-        "show-image"
-      ],
-      "allowedVersions": "!/^0\\.14\\.1$/"
     }
   ]
 }

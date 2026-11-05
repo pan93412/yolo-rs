@@ -1,6 +1,7 @@
-//! A Rust library for the YOLO v11 object detection model.
+//! YOLO object detection in Rust with ONNX Runtime.
 //!
-//! This library provides a high-level API for running the YOLO v11 object detection model.
+//! Runs ONNX exports of Ultralytics YOLOv8, YOLO11, YOLO12 and YOLO26 (exported with
+//! `end2end=False`) and returns each detected object's bounding box, label and confidence.
 //! Currently, it supports only the inference.
 
 pub mod error;
@@ -8,27 +9,40 @@ pub mod model;
 
 use arcstr::ArcStr;
 use error::YoloError;
-use image::{DynamicImage, GenericImageView, Rgba, imageops::FilterType};
+use image::DynamicImage;
+use image::imageops::FilterType;
 use model::YoloModelSession;
-use ndarray::{Array4, ArrayBase, ArrayView4, Axis, s};
-use ort::{inputs, value::TensorRef};
+use ndarray::{Array4, ArrayView4, Axis, s};
+use ort::inputs;
+use ort::value::TensorRef;
 
+/// A box in the coordinates of the original image, in pixels.
 #[derive(Debug, Clone, Copy)]
 pub struct BoundingBox {
+    /// The left edge.
     pub x1: f32,
+    /// The top edge.
     pub y1: f32,
+    /// The right edge.
     pub x2: f32,
+    /// The bottom edge.
     pub y2: f32,
 }
 
+/// An image prepared for [`inference`], made by [`image_to_yolo_input_tensor`].
 #[derive(Debug, Clone)]
 pub struct YoloInput {
-    pub tensor: Array4<f32>, // 640x640
+    /// The image as a (1, 3, 640, 640) RGB tensor in the range [0, 1].
+    pub tensor: Array4<f32>,
+    /// The width of the original image, to scale the boxes back.
     pub raw_width: u32,
+    /// The height of the original image, to scale the boxes back.
     pub raw_height: u32,
 }
 
 impl YoloInput {
+    /// Borrow the input as the [`YoloInputView`] that [`inference`] takes.
+    #[must_use]
     pub fn view(&self) -> YoloInputView<'_> {
         YoloInputView {
             tensor_view: self.tensor.view(),
@@ -38,15 +52,21 @@ impl YoloInput {
     }
 }
 
+/// A borrowed [`YoloInput`].
 #[derive(Debug, Clone, Copy)]
 pub struct YoloInputView<'a> {
+    /// The image as a (1, 3, 640, 640) RGB tensor in the range [0, 1].
     pub tensor_view: ArrayView4<'a, f32>,
+    /// The width of the original image.
     pub raw_width: u32,
+    /// The height of the original image.
     pub raw_height: u32,
 }
 
+/// An object [`inference`] detected.
 #[derive(Debug, Clone)]
 pub struct YoloEntityOutput {
+    /// Where the object is in the original image.
     pub bounding_box: BoundingBox,
     /// The label of the detected entity.
     ///
@@ -64,18 +84,21 @@ pub struct YoloEntityOutput {
 ///
 /// You can pass the resulting tensor to the [`inference`] function.
 /// Note that you might need to call [`YoloInput::view`] to get a view of the tensor.
+#[must_use]
 pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
-    let mut input = ArrayBase::zeros((1, 3, 640, 640));
-
-    let image = original_image.resize_exact(640, 640, FilterType::CatmullRom);
-    for (x, y, Rgba([r, g, b, _])) in image.pixels() {
-        let x = x as usize;
-        let y = y as usize;
-
-        input[[0, 0, y, x]] = (r as f32) / 255.;
-        input[[0, 1, y, x]] = (g as f32) / 255.;
-        input[[0, 2, y, x]] = (b as f32) / 255.;
+    let image = original_image
+        .resize_exact(640, 640, FilterType::CatmullRom)
+        .to_rgb8();
+    // The pixels are laid out (y, x, channel); fill a tensor in that order, then move the channel
+    // axis in front of the rows as the model expects.
+    let mut input = Array4::<f32>::zeros((1, 640, 640, 3));
+    for (value, &channel) in input.iter_mut().zip(image.as_raw()) {
+        *value = f32::from(channel) / 255.;
     }
+    let input = input
+        .permuted_axes([0, 3, 1, 2])
+        .as_standard_layout()
+        .into_owned();
 
     YoloInput {
         tensor: input,
@@ -88,22 +111,30 @@ pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
 ///
 /// The input tensor should be obtained from the [`image_to_yolo_input_tensor`] function.
 /// The [`YoloModelSession`] can be obtained from the [`YoloModelSession::from_filename_v8`] method.
+///
+/// # Errors
+///
+/// Fails when ONNX Runtime cannot take the input or run the model, or when the model has no
+/// `output0` output to read.
 pub fn inference(
     model: &mut YoloModelSession,
     YoloInputView {
         tensor_view,
         raw_width,
         raw_height,
-    }: YoloInputView,
+    }: YoloInputView<'_>,
 ) -> Result<Vec<YoloEntityOutput>, YoloError> {
     fn intersection(box1: &BoundingBox, box2: &BoundingBox) -> f32 {
         (box1.x2.min(box2.x2) - box1.x1.max(box2.x1))
             * (box1.y2.min(box2.y2) - box1.y1.max(box2.y1))
     }
 
+    fn area(bounding_box: &BoundingBox) -> f32 {
+        (bounding_box.x2 - bounding_box.x1) * (bounding_box.y2 - bounding_box.y1)
+    }
+
     fn union(box1: &BoundingBox, box2: &BoundingBox) -> f32 {
-        ((box1.x2 - box1.x1) * (box1.y2 - box1.y1)) + ((box2.x2 - box2.x1) * (box2.y2 - box2.y1))
-            - intersection(box1, box2)
+        area(box1) + area(box2) - intersection(box1, box2)
     }
 
     fn non_maximum_suppression(
@@ -120,8 +151,9 @@ pub fn inference(
 
         let mut result = Vec::with_capacity(boxes.len());
 
-        // Iterate through each box and select it if it doesn't overlap significantly with already selected boxes
-        for current in boxes.into_iter() {
+        // Iterate through each box and select it if it doesn't overlap significantly with already
+        // selected boxes
+        for current in boxes {
             // Check if the current box has a high IoU with any box in the result
             // Using `iter().all()` ensures we short-circuit on the first overlap found
             if result.iter().all(|selected: &YoloEntityOutput| {
@@ -150,7 +182,11 @@ pub fn inference(
         .as_mut()
         .run(inputs)
         .map_err(YoloError::OrtInferenceError)?;
-    let output = outputs["output0"]
+    let output = outputs
+        .get("output0")
+        .ok_or_else(|| {
+            YoloError::OrtExtractSensorError(ort::Error::new("the model has no `output0` output"))
+        })?
         .try_extract_array::<f32>()
         .map_err(YoloError::OrtExtractSensorError)?
         .reversed_axes();
@@ -160,20 +196,29 @@ pub fn inference(
     let boxes = output
         .axis_iter(Axis(0))
         .filter_map(|row| {
-            let (class_id, prob) = row
-                .iter()
-                .skip(4) // skip bounding box coordinates
+            // The box (centre x, centre y, width, height), then one probability per class.
+            let mut values = row.iter().copied();
+            let [xc, yc, w, h] = [
+                values.next()?,
+                values.next()?,
+                values.next()?,
+                values.next()?,
+            ];
+            let (class_id, prob) = values
                 .enumerate()
-                .map(|(index, value)| (index, *value))
                 .reduce(|accum, row| if row.1 > accum.1 { row } else { accum })
                 .filter(|(_, prob)| *prob >= probability_threshold)?;
 
-            let label = labels[class_id].clone();
+            // A class the labels don't cover is dropped rather than panicking.
+            let label = labels.get(class_id)?.clone();
 
-            let xc = row[0_usize] / 640. * (raw_width as f32);
-            let yc = row[1_usize] / 640. * (raw_height as f32);
-            let w = row[2_usize] / 640. * (raw_width as f32);
-            let h = row[3_usize] / 640. * (raw_height as f32);
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "image sides are far below f32's exact integer range (2^24)"
+            )]
+            let (width_scale, height_scale) = (raw_width as f32 / 640., raw_height as f32 / 640.);
+            let (xc, w) = (xc * width_scale, w * width_scale);
+            let (yc, h) = (yc * height_scale, h * height_scale);
 
             Some(YoloEntityOutput {
                 bounding_box: BoundingBox {
