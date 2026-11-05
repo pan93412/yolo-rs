@@ -9,10 +9,10 @@ pub mod model;
 
 use arcstr::ArcStr;
 use error::YoloError;
+use image::DynamicImage;
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView, Rgba};
 use model::YoloModelSession;
-use ndarray::{Array4, ArrayBase, ArrayView4, Axis, s};
+use ndarray::{Array4, ArrayView4, Axis, s};
 use ort::inputs;
 use ort::value::TensorRef;
 
@@ -86,23 +86,19 @@ pub struct YoloEntityOutput {
 /// Note that you might need to call [`YoloInput::view`] to get a view of the tensor.
 #[must_use]
 pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
-    let mut input = ArrayBase::zeros((1, 3, 640, 640));
-
-    let image = original_image.resize_exact(640, 640, FilterType::CatmullRom);
-    for (x, y, Rgba([r, g, b, _])) in image.pixels() {
-        let x = x as usize;
-        let y = y as usize;
-
-        #[expect(
-            clippy::indexing_slicing,
-            reason = "x and y come from the 640×640 image the tensor is sized for"
-        )]
-        {
-            input[[0, 0, y, x]] = f32::from(r) / 255.;
-            input[[0, 1, y, x]] = f32::from(g) / 255.;
-            input[[0, 2, y, x]] = f32::from(b) / 255.;
-        }
+    let image = original_image
+        .resize_exact(640, 640, FilterType::CatmullRom)
+        .to_rgb8();
+    // The pixels are laid out (y, x, channel); fill a tensor in that order, then move the channel
+    // axis in front of the rows as the model expects.
+    let mut input = Array4::<f32>::zeros((1, 640, 640, 3));
+    for (value, &channel) in input.iter_mut().zip(image.as_raw()) {
+        *value = f32::from(channel) / 255.;
     }
+    let input = input
+        .permuted_axes([0, 3, 1, 2])
+        .as_standard_layout()
+        .into_owned();
 
     YoloInput {
         tensor: input,
@@ -118,11 +114,8 @@ pub fn image_to_yolo_input_tensor(original_image: &DynamicImage) -> YoloInput {
 ///
 /// # Errors
 ///
-/// Fails when ONNX Runtime cannot take the input, run the model or read its output.
-///
-/// # Panics
-///
-/// Panics when the model has no `output0` output, which every Ultralytics export has.
+/// Fails when ONNX Runtime cannot take the input or run the model, or when the model has no
+/// `output0` output to read.
 pub fn inference(
     model: &mut YoloModelSession,
     YoloInputView {
@@ -189,11 +182,11 @@ pub fn inference(
         .as_mut()
         .run(inputs)
         .map_err(YoloError::OrtInferenceError)?;
-    #[expect(
-        clippy::indexing_slicing,
-        reason = "every Ultralytics export names its output output0"
-    )]
-    let output = outputs["output0"]
+    let output = outputs
+        .get("output0")
+        .ok_or_else(|| {
+            YoloError::OrtExtractSensorError(ort::Error::new("the model has no `output0` output"))
+        })?
         .try_extract_array::<f32>()
         .map_err(YoloError::OrtExtractSensorError)?
         .reversed_axes();

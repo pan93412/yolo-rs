@@ -83,7 +83,8 @@ fn main() -> Result<()> {
         draw_box(&mut picture, bounding_box, color_of(label));
     }
 
-    picture
+    // Through `DynamicImage`, so formats without alpha (JPEG) get a picture they can encode.
+    image::DynamicImage::ImageRgba8(picture)
         .save(&args.output)
         .with_context(|| format!("failed to save {}", args.output.display()))?;
     tracing::info!("Saved {}", args.output.display());
