@@ -4,13 +4,21 @@ Detects objects in a picture and saves a copy with a box around each one. Mostly
 
 ## Usage
 
+From a [release](https://github.com/pan93412/yolo-rs/releases/latest) archive:
+
+```bash
+./yolo-cli models/yolo11x.onnx data/baseball.jpg --output detected.png
+```
+
+or from this directory:
+
 ```bash
 cargo run --release -- models/yolo11x.onnx data/baseball.jpg --output detected.png
 ```
 
 where:
 
-- `models/yolo11x.onnx` is the YOLO model exported to ONNX. Any version in the [supported models](../../README.md#supported-models) table works.
+- `models/yolo11x.onnx` is the YOLO model exported to ONNX. Any version in the [supported models](https://github.com/pan93412/yolo-rs#supported-models) table works.
 - `data/baseball.jpg` is the picture to detect objects in (JPEG or PNG).
 - `--output` (`-o`) is where the picture with the boxes goes; `detected.png` by default.
 

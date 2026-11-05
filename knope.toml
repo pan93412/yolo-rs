@@ -3,7 +3,9 @@
 versioned_files = [
   "Cargo.toml",
   { path = "Cargo.lock", dependency = "yolo-rs" },
+  { path = "Cargo.lock", dependency = "yolo-cli" },
   { path = "examples/yolo-cli/Cargo.toml", dependency = "yolo-rs" },
+  "examples/yolo-cli/Cargo.toml",
 ]
 changelog = "CHANGELOG.md"
 
