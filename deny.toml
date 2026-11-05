@@ -1,0 +1,48 @@
+# Dependency policy, checked by `cargo deny check` (CONTRIBUTING.md, "Dependencies").
+
+[graph]
+all-features = true
+
+[advisories]
+# RustSec advisories (unmaintained, unsound and vulnerable crates) fail the check; so do yanked
+# versions. Give every ignored advisory its reason here.
+yanked = "deny"
+ignore = [
+  # paste is unmaintained but sound; image pulls it in through its EXR and AVIF codecs.
+  { id = "RUSTSEC-2024-0436", reason = "a proc macro reached only through image's codecs; no fix upstream" },
+]
+
+[licenses]
+# OSI-approved licences only.
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "NCSA",
+  "Unicode-3.0",
+  "Zlib",
+]
+confidence-threshold = 0.93
+unused-allowed-license = "allow"
+
+# Not OSI-approved, but only ort-sys's build script uses it, to download ONNX Runtime; it never
+# ends up in what yolo-rs builds.
+exceptions = [{ crate = "webpki-root-certs", allow = ["CDLA-Permissive-2.0"] }]
+
+[licenses.private]
+# The example is not published.
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+# Path dependencies inside this workspace have no version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

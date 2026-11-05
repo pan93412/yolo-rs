@@ -34,23 +34,19 @@
         );
     in
     {
-      overlays.default = final: prev: {
-        rustToolchain =
-          let
-            rust = prev.rust-bin;
-          in
-          if builtins.pathExists ./rust-toolchain.toml then
-            rust.fromRustupToolchainFile ./rust-toolchain.toml
-          else if builtins.pathExists ./rust-toolchain then
-            rust.fromRustupToolchainFile ./rust-toolchain
-          else
-            rust.stable.latest.default.override {
-              extensions = [
-                "rust-src"
-                "rustfmt"
-                "clippy"
-              ];
-            };
+      overlays.default = final: _: {
+        # The newest nightly in the locked rust-overlay that has all these components.
+        rustToolchain = final.rust-bin.selectLatestNightlyWith (
+          toolchain:
+          toolchain.minimal.override {
+            extensions = [
+              "rustfmt"
+              "clippy"
+              "rust-src"
+              "rust-analyzer"
+            ];
+          }
+        );
       };
 
       devShells = forEachSupportedSystem (
@@ -62,7 +58,7 @@
               openssl
               pkg-config
               cargo-edit
-              rust-analyzer
+              cargo-deny
 
               nixfmt
               knope

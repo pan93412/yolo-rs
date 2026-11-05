@@ -11,17 +11,23 @@ use crate::error::YoloError;
 /// It is a wrapper around the ONNX runtime session and the YOLO labels.
 #[derive(Debug)]
 pub struct YoloModelSession {
+    /// The ONNX Runtime session that runs the model.
     pub session: ort::session::Session,
+    /// The label of each class, in the model's class order.
     pub labels: Vec<ArcStr>,
 
-    pub probability_threshold: Option<f32>, // default = 0.5
-    pub iou_threshold: Option<f32>,         // default = 0.7
+    /// The lowest class probability a detection needs; 0.5 when `None`.
+    pub probability_threshold: Option<f32>,
+    /// The overlap (IoU) above which non-maximum suppression drops the weaker box; 0.7 when
+    /// `None`.
+    pub iou_threshold: Option<f32>,
 }
 
 impl YoloModelSession {
     /// Wrap a ONNX session to a [`YoloModelSession`].
     ///
     /// The `session` is the ONNX runtime session, and the `labels` are the YOLO labels.
+    #[must_use]
     pub fn new(
         session: ort::session::Session,
         labels: impl Iterator<Item = impl Into<ArcStr>>,
@@ -35,6 +41,7 @@ impl YoloModelSession {
     }
 
     /// Wrap a ONNX session to a [`YoloModelSession`] based on the labels of YOLO v8 (v11).
+    #[must_use]
     pub fn new_v8(session: ort::session::Session) -> Self {
         const LABELS: &[ArcStr] = &[
             arcstr::literal!("person"),
@@ -134,6 +141,10 @@ impl YoloModelSession {
     ///
     /// You can export the ONNX model file according to
     /// [Ultralytics' manual](https://docs.ultralytics.com/integrations/onnx/).
+    ///
+    /// # Errors
+    ///
+    /// Fails when ONNX Runtime cannot create the session or load the file.
     pub fn from_filename_v8(filename: impl AsRef<Path>) -> Result<Self, YoloError> {
         let session = ort::session::Session::builder()
             .map_err(YoloError::OrtSessionBuildError)?
@@ -143,14 +154,20 @@ impl YoloModelSession {
         Ok(Self::new_v8(session))
     }
 
+    /// The label of each class, in the model's class order.
+    #[must_use]
     pub fn get_labels(&self) -> &[ArcStr] {
         &self.labels
     }
 
+    /// The lowest class probability a detection needs.
+    #[must_use]
     pub fn get_probability_threshold(&self) -> f32 {
         self.probability_threshold.unwrap_or(0.5)
     }
 
+    /// The overlap (IoU) above which non-maximum suppression drops the weaker box.
+    #[must_use]
     pub fn get_iou_threshold(&self) -> f32 {
         self.iou_threshold.unwrap_or(0.7)
     }

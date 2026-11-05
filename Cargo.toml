@@ -18,7 +18,89 @@ ndarray = "0.17"
 ort = "2.0.0-rc.12"
 thiserror = "2.0.21"
 
+[lints]
+workspace = true
+
 [workspace]
-members = [
-	'examples/yolo-cli',
-]
+members = ["examples/yolo-cli"]
+
+[workspace.lints.rust]
+# `deny`, not `forbid`: ndarray's `s!` expands to an `#[allow(unsafe_code)]` block.
+unsafe_code = "deny"
+non_ascii_idents = "forbid"
+rust_2018_idioms = { level = "warn", priority = -1 }
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+redundant_lifetimes = "warn"
+single_use_lifetimes = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+let_underscore_drop = "warn"
+meta_variable_misuse = "warn"
+unit_bindings = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "warn"
+private_intra_doc_links = "warn"
+unescaped_backticks = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+# Duplicate versions are tracked by cargo-deny, not clippy.
+multiple_crate_versions = "allow"
+# Contradicts rustc's `unreachable_pub`, which we keep: items are `pub(crate)` unless exported.
+redundant_pub_crate = "allow"
+
+# Selected `restriction` lints.
+# A library must not panic on its input.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+indexing_slicing = "warn"
+string_slice = "warn"
+get_unwrap = "warn"
+unwrap_in_result = "warn"
+todo = "warn"
+unimplemented = "warn"
+exit = "warn"
+# Errors must keep their cause.
+map_err_ignore = "warn"
+let_underscore_must_use = "warn"
+let_underscore_untyped = "warn"
+unused_result_ok = "warn"
+# Suppressions must be explicit and justified.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+# Output goes through `tracing`.
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+# Hygiene.
+clone_on_ref_ptr = "warn"
+empty_structs_with_brackets = "warn"
+error_impl_error = "warn"
+format_push_string = "warn"
+if_then_some_else_none = "warn"
+infinite_loop = "warn"
+mem_forget = "warn"
+mod_module_files = "warn"
+multiple_inherent_impl = "warn"
+partial_pub_fields = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+str_to_string = "warn"
+tests_outside_test_module = "warn"
+try_err = "warn"
+undocumented_unsafe_blocks = "warn"
+unneeded_field_pattern = "warn"
+unseparated_literal_suffix = "warn"
+verbose_file_reads = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
