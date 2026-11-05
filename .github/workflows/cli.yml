@@ -112,8 +112,11 @@ jobs:
             --p12-file "$RUNNER_TEMP/developer-id.p12" \
             --p12-password-file "$RUNNER_TEMP/p12-password" \
             "$bin"
-          # A bare Mach-O binary takes no stapled ticket: Gatekeeper looks it up online.
-          "$rcodesign" notary-submit --wait --api-key-file "$RUNNER_TEMP/api-key.json" "$bin"
+          # Notarization takes a bundle, package, disk image or ZIP, not a bare Mach-O. The ticket
+          # can't be stapled to the binary either: Gatekeeper looks it up online.
+          (cd "$RUNNER_TEMP/bin" && python3 -m zipfile -c "$RUNNER_TEMP/yolo-cli.zip" yolo-cli)
+          "$rcodesign" notary-submit --wait --api-key-file "$RUNNER_TEMP/api-key.json" \
+            "$RUNNER_TEMP/yolo-cli.zip"
           rm "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/p12-password" "$RUNNER_TEMP/api-key.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
