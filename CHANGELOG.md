@@ -18,16 +18,11 @@ On macOS, sessions now run on CoreML by default: ort rc.15 lets ONNX Runtime pic
 
 #### yolo-rs no longer turns on image's codecs
 
-yolo-rs works on an already decoded `DynamicImage`, so it now depends on `image` without its default
-features. This drops about 70 crates, among them the unmaintained `paste`. If your project decodes
-images with `image` but turned its default features off, enable the formats you open (for example
-`features = ["jpeg", "png"]`) on your own `image` dependency.
+yolo-rs works on an already decoded `DynamicImage`, so it now depends on `image` without its default features. This drops about 70 crates, among them the unmaintained `paste`. If your project decodes images with `image` but turned its default features off, enable the formats you open (for example `features = ["jpeg", "png"]`) on your own `image` dependency.
 
 #### `inference` no longer panics on unexpected model outputs
 
-A model with more classes than `YoloModelSession::labels` made `inference` panic on a detection of an
-extra class; that detection is now dropped instead. A model without an `output0` output made it panic
-too; it now returns `YoloError::OrtExtractSensorError`.
+A model with more classes than `YoloModelSession::labels` made `inference` panic on a detection of an extra class; that detection is now dropped instead. A model without an `output0` output made it panic too; it now returns `YoloError::OrtExtractSensorError`.
 
 ## 0.2.3 (2026-11-05)
 
