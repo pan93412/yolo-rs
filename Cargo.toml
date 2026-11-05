@@ -20,6 +20,8 @@ thiserror = "2.0.21"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+# The e2e test and benchmark open a JPEG; the library itself needs no codecs.
+image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 
 [[bench]]
 name = "inference"
