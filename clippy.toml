@@ -7,4 +7,4 @@ allow-dbg-in-tests = true
 allow-print-in-tests = true
 
 # Proper nouns that doc_markdown would otherwise ask to wrap in backticks.
-doc-valid-idents = ["IoU", "ONNX", "YOLOv8", "YOLOv11", "CoreML", "CUDA", ".."]
+doc-valid-idents = ["IoU", "ONNX", "YOLOv8", "YOLOv8x", "YOLO11x", "YOLO12x", "YOLO26x", "YOLOv11", "CoreML", "CUDA", ".."]

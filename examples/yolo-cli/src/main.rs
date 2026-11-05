@@ -1,28 +1,38 @@
-//! Detects objects in a picture with a YOLO model and shows the boxes in a window.
+//! Detects objects in a picture with a YOLO model and saves the picture with a box around each.
 
 use std::path::PathBuf;
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use image::{Rgba, RgbaImage};
 use ort::execution_providers::{CUDAExecutionProvider, CoreMLExecutionProvider};
-use raqote::{DrawOptions, DrawTarget, LineJoin, PathBuilder, SolidSource, Source, StrokeStyle};
-use show_image::{AsImageView, WindowOptions, event};
-use yolo_rs::{YoloEntityOutput, image_to_yolo_input_tensor, inference, model};
+use yolo_rs::{BoundingBox, YoloEntityOutput, image_to_yolo_input_tensor, inference, model};
+
+/// The box outline's width, in pixels.
+const LINE_WIDTH: u32 = 4;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
+    /// The YOLO model, exported to ONNX.
     model_path: PathBuf,
+    /// The picture to detect objects in.
     picture_path: PathBuf,
 
+    /// Where to save the picture with the boxes drawn on it.
+    #[arg(long, short, default_value = "detected.png")]
+    output: PathBuf,
+
+    /// The lowest class probability a detection needs (0.5 by default).
     #[arg(long)]
     probability_threshold: Option<f32>,
 
+    /// The overlap above which non-maximum suppression drops the weaker box (0.7 by default).
     #[arg(long)]
     iou_threshold: Option<f32>,
 }
 
-#[show_image::main]
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -38,140 +48,87 @@ fn main() -> Result<()> {
         .then_some(())
         .context("failed to commit ONNX Runtime")?;
 
-    tracing::info!("Loading image {:?}…", args.picture_path.display());
+    tracing::info!("Loading image {}…", args.picture_path.display());
     let original_img = image::open(&args.picture_path)
-        .with_context(|| format!("failed to open image {:?}", args.picture_path.display()))?;
+        .with_context(|| format!("failed to open image {}", args.picture_path.display()))?;
 
-    tracing::info!("Loading models {:?}…", args.model_path.display());
-    let mut model = {
-        let mut model = model::YoloModelSession::from_filename_v8(&args.model_path)
-            .with_context(|| format!("failed to load model {:?}", args.model_path.display()))?;
-
-        model.iou_threshold = args.iou_threshold;
-        model.probability_threshold = args.probability_threshold;
-
-        model
-    };
+    tracing::info!("Loading model {}…", args.model_path.display());
+    let mut model = model::YoloModelSession::from_filename_v8(&args.model_path)
+        .with_context(|| format!("failed to load model {}", args.model_path.display()))?;
+    model.iou_threshold = args.iou_threshold;
+    model.probability_threshold = args.probability_threshold;
 
     tracing::debug!("Converting image to tensor…");
     let input = image_to_yolo_input_tensor(&original_img);
 
-    // Run YOLOv8 inference
     tracing::info!("Running inference…");
-
-    let now = std::time::Instant::now();
-    let result = inference(&mut model, input.view())?;
+    let now = Instant::now();
+    let entities = inference(&mut model, input.view())?;
     tracing::info!("Inference took {:?}", now.elapsed());
 
-    let overlay = draw_boxes(&original_img, result)?;
-    show(original_img, overlay)
-}
-
-/// Draws a box around each detected entity on a transparent layer the size of `image`.
-fn draw_boxes(
-    image: &image::DynamicImage,
-    entities: Vec<YoloEntityOutput>,
-) -> Result<show_image::Image> {
-    tracing::debug!("Drawing bounding boxes…");
-    let mut dt = DrawTarget::new(
-        i32::try_from(image.width()).context("image too wide")?,
-        i32::try_from(image.height()).context("image too tall")?,
-    );
-
+    let mut picture = original_img.to_rgba8();
     for YoloEntityOutput {
-        bounding_box: bbox,
+        bounding_box,
         label,
         confidence,
-    } in entities
+    } in &entities
     {
         tracing::info!(
-            "Found entity {:?} with confidence {:.2} at ({:.2}, {:.2}) - ({:.2}, {:.2})",
-            label,
-            confidence,
-            bbox.x1,
-            bbox.y1,
-            bbox.x2,
-            bbox.y2
+            "Found entity {label:?} with confidence {confidence:.2} at ({:.2}, {:.2}) - ({:.2}, {:.2})",
+            bounding_box.x1,
+            bounding_box.y1,
+            bounding_box.x2,
+            bounding_box.y2
         );
-
-        let mut pb = PathBuilder::new();
-        pb.rect(bbox.x1, bbox.y1, bbox.x2 - bbox.x1, bbox.y2 - bbox.y1);
-        let path = pb.finish();
-        let color = match label.as_str() {
-            "baseball bat" => SolidSource {
-                r: 0x00,
-                g: 0x10,
-                b: 0x80,
-                a: 0x80,
-            },
-            "baseball glove" => SolidSource {
-                r: 0x20,
-                g: 0x80,
-                b: 0x40,
-                a: 0x80,
-            },
-            _ => SolidSource {
-                r: 0x80,
-                g: 0x10,
-                b: 0x40,
-                a: 0x80,
-            },
-        };
-        dt.stroke(
-            &path,
-            &Source::Solid(color),
-            &StrokeStyle {
-                join: LineJoin::Round,
-                width: 4.,
-                ..StrokeStyle::default()
-            },
-            &DrawOptions::new(),
-        );
+        draw_box(&mut picture, bounding_box, color_of(label));
     }
 
-    Ok(dt.into())
-}
-
-/// Shows `image` with `overlay` on top until Escape is pressed.
-fn show(image: image::DynamicImage, overlay: show_image::Image) -> Result<()> {
-    tracing::info!("Displaying image…");
-    let size = [image.width(), image.height()];
-    let window = show_image::context()
-        .run_function_wait(move |context| -> Result<_, String> {
-            let mut window = context
-                .create_window(
-                    "ort + YOLOv8",
-                    WindowOptions {
-                        size: Some(size),
-                        ..WindowOptions::default()
-                    },
-                )
-                .map_err(|e| e.to_string())?;
-            window.set_image(
-                "baseball",
-                &image.as_image_view().map_err(|e| e.to_string())?,
-            );
-            window.set_overlay(
-                "yolo",
-                &overlay.as_image_view().map_err(|e| e.to_string())?,
-                true,
-            );
-            Ok(window.proxy())
-        })
-        .map_err(|e| anyhow::anyhow!(e))
-        .context("failed to create window")?;
-
-    for event in window
-        .event_channel()
-        .context("failed to get event channel")?
-    {
-        if let event::WindowEvent::KeyboardInput(event) = event
-            && event.input.key_code == Some(event::VirtualKeyCode::Escape)
-            && event.input.state.is_pressed()
-        {
-            break;
-        }
-    }
+    picture
+        .save(&args.output)
+        .with_context(|| format!("failed to save {}", args.output.display()))?;
+    tracing::info!("Saved {}", args.output.display());
 
     Ok(())
+}
+
+/// The outline colour for an entity's label.
+fn color_of(label: &str) -> Rgba<u8> {
+    match label {
+        "baseball bat" => Rgba([0x00, 0x20, 0xFF, 0xFF]),
+        "baseball glove" => Rgba([0x40, 0xFF, 0x80, 0xFF]),
+        _ => Rgba([0xFF, 0x20, 0x80, 0xFF]),
+    }
+}
+
+/// Draws the outline of `bounding_box` on `picture`, clipped to the picture's edges.
+fn draw_box(picture: &mut RgbaImage, bounding_box: &BoundingBox, color: Rgba<u8>) {
+    let (width, height) = picture.dimensions();
+    if width == 0 || height == 0 {
+        return;
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "each coordinate is clamped to the picture's pixels first"
+    )]
+    let clamp = |value: f32, max: u32| value.round().clamp(0., (max - 1) as f32) as u32;
+    let (x1, x2) = (clamp(bounding_box.x1, width), clamp(bounding_box.x2, width));
+    let (y1, y2) = (
+        clamp(bounding_box.y1, height),
+        clamp(bounding_box.y2, height),
+    );
+
+    for y in y1..=y2 {
+        for x in x1..=x2 {
+            let on_edge = x < x1 + LINE_WIDTH
+                || x + LINE_WIDTH > x2
+                || y < y1 + LINE_WIDTH
+                || y + LINE_WIDTH > y2;
+            if on_edge {
+                picture.put_pixel(x, y, color);
+            }
+        }
+    }
 }

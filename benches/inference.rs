@@ -1,10 +1,19 @@
 //! `YOLO_BENCH_MODELS` lists ONNX models separated by commas; each is timed on
 //! `examples/yolo-cli/data/baseball.jpg`. Without it, only preprocessing is timed.
 
-use std::{env, hint::black_box, path::Path};
+#![expect(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a benchmark stops at the first failure"
+)]
+
+use std::env;
+use std::hint::black_box;
+use std::path::Path;
 
 use criterion::{Criterion, SamplingMode, criterion_group, criterion_main};
-use yolo_rs::{image_to_yolo_input_tensor, inference, model::YoloModelSession};
+use yolo_rs::model::YoloModelSession;
+use yolo_rs::{image_to_yolo_input_tensor, inference};
 
 fn benches(c: &mut Criterion) {
     let image_path =
@@ -12,7 +21,7 @@ fn benches(c: &mut Criterion) {
     let image = image::open(&image_path).expect("failed to open the benchmark image");
 
     c.bench_function("preprocess", |b| {
-        b.iter(|| image_to_yolo_input_tensor(black_box(&image)))
+        b.iter(|| image_to_yolo_input_tensor(black_box(&image)));
     });
 
     let input = image_to_yolo_input_tensor(&image);
@@ -30,7 +39,7 @@ fn benches(c: &mut Criterion) {
         );
 
         group.bench_function(name, |b| {
-            b.iter(|| inference(&mut model, black_box(input.view())).expect("inference failed"))
+            b.iter(|| inference(&mut model, black_box(input.view())).expect("inference failed"));
         });
     }
     group.finish();

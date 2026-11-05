@@ -2,9 +2,16 @@
 //! that it finds what YOLOv8x, YOLO11x, YOLO12x and YOLO26x all find there at the default
 //! threshold. The Models workflow sets it; without it the test does nothing.
 
-use std::{env, path::Path};
+#![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test crate is a test module of its own"
+)]
 
-use yolo_rs::{BoundingBox, image_to_yolo_input_tensor, inference, model::YoloModelSession};
+use std::env;
+use std::path::Path;
+
+use yolo_rs::model::YoloModelSession;
+use yolo_rs::{BoundingBox, image_to_yolo_input_tensor, inference};
 
 /// Each found by all four models with a confidence of 0.74 or more, in 640×480 image pixels.
 const EXPECTED: [(&str, [f32; 4]); 4] = [
@@ -18,7 +25,8 @@ fn iou(a: &BoundingBox, [x1, y1, x2, y2]: [f32; 4]) -> f32 {
     let width = (a.x2.min(x2) - a.x1.max(x1)).max(0.);
     let height = (a.y2.min(y2) - a.y1.max(y1)).max(0.);
     let intersection = width * height;
-    let union = (a.x2 - a.x1) * (a.y2 - a.y1) + (x2 - x1) * (y2 - y1) - intersection;
+    let area = |width: f32, height: f32| width * height;
+    let union = area(a.x2 - a.x1, a.y2 - a.y1) + area(x2 - x1, y2 - y1) - intersection;
     intersection / union
 }
 
