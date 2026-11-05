@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Commits sign off, as the DCO check requires of every commit.",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Asia/Taipei",
+  "labels": [
+    "dependencies"
+  ],
+  "commitBody": "Signed-off-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>",
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "schedule": [
+    "* 3-6 * * 1"
+  ],
+  "updateNotScheduled": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "* 3-6 * * 1"
+    ]
+  },
+  "nix": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github actions"
+    },
+    {
+      "description": "One pull request for compatible crate updates; majors stay separate.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "cargo (non-major)"
+    },
+    {
+      "description": "ort and its companion crates move together.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "/^ort(-|$)/"
+      ],
+      "groupName": "ort"
+    },
+    {
+      "description": "show-image 0.14.1 does not build on macOS; examples/yolo-cli pins 0.14.0.",
+      "matchPackageNames": [
+        "show-image"
+      ],
+      "allowedVersions": "!/^0\\.14\\.1$/"
+    }
+  ]
+}
