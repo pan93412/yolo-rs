@@ -28,8 +28,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ort's ONNX Runtime needs glibc 2.38 and GCC 14's libstdc++, which 22.04 lacks; on 24.04
-          # the binaries need glibc 2.39.
+          # ort's ONNX Runtime needs glibc 2.38 and GCC 14's libstdc++, which 22.04 lacks; on 24.04 they
+          # the binaries need glibc 2.38.
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
