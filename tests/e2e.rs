@@ -5,27 +5,11 @@
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
-    use yolo_rs::error::YoloError;
+    use anyhow::{Context, Result};
     use yolo_rs::model::YoloModelSession;
     use yolo_rs::{BoundingBox, image_to_yolo_input_tensor, inference};
-
-    /// What keeps the test from checking the detections.
-    #[derive(Debug, thiserror::Error)]
-    enum E2eError {
-        #[error("failed to open {}", path.display())]
-        OpenImage {
-            path: PathBuf,
-            source: image::ImageError,
-        },
-        #[error("failed to initialize ONNX Runtime")]
-        InitOrt(#[source] ort::Error),
-        #[error("failed to load {path}")]
-        LoadModel { path: String, source: YoloError },
-        #[error("inference failed")]
-        Inference(#[source] YoloError),
-    }
 
     /// Each found by all four models with a confidence of 0.74 or more, in 640×480 image pixels.
     const EXPECTED: [(&str, [f32; 4]); 4] = [
@@ -45,7 +29,7 @@ mod tests {
     }
 
     #[test]
-    fn finds_the_players_on_baseball_jpg() -> Result<(), E2eError> {
+    fn finds_the_players_on_baseball_jpg() -> Result<()> {
         let Ok(model_path) = env::var("YOLO_E2E_MODEL") else {
             eprintln!("YOLO_E2E_MODEL is not set; nothing to check");
             return Ok(());
@@ -53,20 +37,15 @@ mod tests {
 
         let image_path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/yolo-cli/data/baseball.jpg");
-        let image = image::open(&image_path).map_err(|source| E2eError::OpenImage {
-            path: image_path.clone(),
-            source,
-        })?;
+        let image = image::open(&image_path)
+            .with_context(|| format!("failed to open {}", image_path.display()))?;
         let input = image_to_yolo_input_tensor(&image);
-        let environment = ort::init().build().map_err(E2eError::InitOrt)?;
-        let mut model =
-            YoloModelSession::from_filename_v8(&environment, &model_path).map_err(|source| {
-                E2eError::LoadModel {
-                    path: model_path.clone(),
-                    source,
-                }
-            })?;
-        let found = inference(&mut model, input.view()).map_err(E2eError::Inference)?;
+        let environment = ort::init()
+            .build()
+            .context("failed to initialize ONNX Runtime")?;
+        let mut model = YoloModelSession::from_filename_v8(&environment, &model_path)
+            .with_context(|| format!("failed to load {model_path}"))?;
+        let found = inference(&mut model, input.view()).context("inference failed")?;
 
         for (label, expected) in EXPECTED {
             let best = found

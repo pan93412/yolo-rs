@@ -1224,6 +1224,7 @@ dependencies = [
 name = "yolo-rs"
 version = "0.2.3"
 dependencies = [
+ "anyhow",
  "arcstr",
  "criterion",
  "image",

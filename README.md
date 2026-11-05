@@ -48,6 +48,17 @@ On a MacBook Pro (2024) with M3 Max, the median of 20 runs after 5 warm-up runs:
 
 Times cover `inference` (the model and non-maximum suppression) on [the test picture](examples/yolo-cli/data/baseball.jpg), with ONNX Runtime from `ort` 2.0.0-rc.12 and models exported by Ultralytics 8.4.51.
 
+## Building on macOS
+
+ONNX Runtime's Apple build calls `__isPlatformVersionAtLeast`, which lives in the compiler runtime that Rust does not link by default. Without it, linking a binary, test or benchmark that uses yolo-rs fails with `Undefined symbols for architecture arm64: "___isPlatformVersionAtLeast"`. Add this to your project's `.cargo/config.toml`:
+
+```toml
+[target.'cfg(target_vendor = "apple")']
+rustflags = ["-Clink-arg=-fapple-link-rtlib"]
+```
+
+Or emit it from your binary's build script: `println!("cargo:rustc-link-arg=-fapple-link-rtlib");`.
+
 ## Examples
 
 - [**yolo-cli**](examples/yolo-cli): Command-line interface for running YOLO inference on images.
