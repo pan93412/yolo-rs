@@ -1,6 +1,7 @@
-//! A Rust library for the YOLO v11 object detection model.
+//! YOLO object detection in Rust with ONNX Runtime.
 //!
-//! This library provides a high-level API for running the YOLO v11 object detection model.
+//! Runs ONNX exports of Ultralytics YOLOv8, YOLO11, YOLO12 and YOLO26 (exported with
+//! `end2end=False`) and returns each detected object's bounding box, label and confidence.
 //! Currently, it supports only the inference.
 
 pub mod error;
