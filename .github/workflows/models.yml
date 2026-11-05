@@ -1,0 +1,86 @@
+name: Models
+
+# Runs YOLOv8x, YOLO11x, YOLO12x and YOLO26x through yolo-rs: tests/e2e.rs checks that each finds
+# the same players on baseball.jpg, then benches/inference.rs times it on the CPU. Shared runners
+# vary by a few percent from run to run, so read benchmark trends rather than single differences.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - src/**
+      - tests/**
+      - benches/**
+      - Cargo.toml
+      - Cargo.lock
+      - flake.nix
+      - flake.lock
+      - .github/actions/**
+      - .github/workflows/models.yml
+  schedule:
+    # Monday 03:00 Asia/Taipei
+    - cron: "0 19 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: models-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  model:
+    name: ${{ matrix.model }}
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [yolov8x, yolo11x, yolo12x, yolo26x]
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - id: onnx
+        uses: ./.github/actions/yolo-model
+        with:
+          model: ${{ matrix.model }}
+
+      - name: End-to-end
+        env:
+          YOLO_E2E_MODEL: ${{ steps.onnx.outputs.path }}
+        run: nix develop -c cargo test --locked --test e2e -- --nocapture
+
+      - name: Benchmark
+        env:
+          YOLO_BENCH_MODELS: ${{ steps.onnx.outputs.path }}
+        run: nix develop -c cargo bench --locked --bench inference
+
+      - name: Summary
+        env:
+          MODEL: ${{ matrix.model }}
+        run: |
+          {
+            echo "### $MODEL"
+            echo
+            echo "$(nproc) × $(lscpu | sed -n 's/^Model name: *//p' | head -1), ONNX Runtime on the CPU, \`examples/yolo-cli/data/baseball.jpg\`."
+            echo
+            echo "| Benchmark | Mean | 95% CI of the mean | Median |"
+            echo "| --- | ---: | ---: | ---: |"
+            find target/criterion -path '*/new/benchmark.json' | sort | while read -r benchmark; do
+              jq -rn --slurpfile b "$benchmark" --slurpfile e "$(dirname "$benchmark")/estimates.json" '
+                def ms: . / 1e6 * 1000 | round / 1000 | tostring + " ms";
+                $e[0] as $e
+                | "| \($b[0].full_id) | \($e.mean.point_estimate | ms) | \($e.mean.confidence_interval.lower_bound | ms) – \($e.mean.confidence_interval.upper_bound | ms) | \($e.median.point_estimate | ms) |"'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criterion-${{ matrix.model }}
+          path: target/criterion
+          retention-days: 90

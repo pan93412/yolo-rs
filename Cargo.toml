@@ -1,9 +1,9 @@
 [package]
 name = "yolo-rs"
-description = "YOLO object detection model in Rust. Currently on YOLO v11."
+description = "YOLO object detection in Rust with ONNX Runtime: YOLOv8, YOLO11, YOLO12 and YOLO26"
 authors = ["Yi-Jyun Pan <pan93412@gmail.com>"]
-keywords = ["yolo", "object-detection", "onnx", "rust", "machine-learning"]
-categories = ["science"]
+keywords = ["yolo", "object-detection", "onnx", "computer-vision", "yolo11"]
+categories = ["computer-vision", "science"]
 version = "0.2.3"
 edition = "2024"
 license = "Apache-2.0"
@@ -17,6 +17,15 @@ image = "0.25.10"
 ndarray = "0.17"
 ort = "2.0.0-rc.12"
 thiserror = "2.0.21"
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+# The e2e test and benchmark open a JPEG; the library itself needs no codecs.
+image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
+
+[[bench]]
+name = "inference"
+harness = false
 
 [workspace]
 members = [

@@ -73,6 +73,27 @@
               RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
             };
           };
+
+          # `yolo export` for the Models workflow.
+          export =
+            let
+              python = pkgs.python3;
+            in
+            pkgs.mkShell {
+              packages = [
+                (python.withPackages (p: [
+                  # Its tests download datasets, which the build sandbox can't reach.
+                  (p.ultralytics.overridePythonAttrs { doCheck = false; })
+                  p.onnx
+                  p.onnxslim
+                  p.onnxruntime
+                ]))
+              ];
+              # What an export depends on; the Models workflow caches the ONNX files under it.
+              passthru.exportKey =
+                with python.pkgs;
+                "ultralytics-${ultralytics.version}-torch-${torch.version}-onnx-${onnx.version}-onnxslim-${onnxslim.version}";
+            };
         }
       );
     };
