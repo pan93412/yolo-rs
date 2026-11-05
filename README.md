@@ -59,6 +59,22 @@ rustflags = ["-Clink-arg=-fapple-link-rtlib"]
 
 Or emit it from your binary's build script: `println!("cargo:rustc-link-arg=-fapple-link-rtlib");`.
 
+### CoreML by default
+
+`ort` lets ONNX Runtime pick a device for each session, and on macOS it always adds CoreML, even when you register only the CPU execution provider. `from_filename_v8` therefore runs on CoreML on a Mac. To run on the CPU, build the session yourself with `AutoDevicePolicy::PreferCPU` and hand it to `new_v8`:
+
+```rust
+use ort::session::Session;
+use ort::session::builder::AutoDevicePolicy;
+use yolo_rs::model::YoloModelSession;
+
+let environment = ort::init().build()?;
+let session = Session::builder(&environment)?
+    .with_auto_device(AutoDevicePolicy::PreferCPU)?
+    .commit_from_file("yolo11x.onnx")?;
+let model = YoloModelSession::new_v8(session);
+```
+
 ## Examples
 
 - [**yolo-cli**](examples/yolo-cli): Command-line interface for running YOLO inference on images.
