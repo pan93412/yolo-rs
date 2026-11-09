@@ -3,7 +3,8 @@ name: Release
 # Run by hand: knope turns the change files in .changeset/ into the next CHANGELOG.md section and
 # version, and opens `chore(release): vX.Y.Z` from release/next. Once that pull request is merged,
 # the push to master publishes the crate to crates.io, then tags the merge commit and creates the
-# GitHub release with the CHANGELOG.md section as its notes (RELEASING.md).
+# GitHub release with the CHANGELOG.md section as its notes. The CLI workflow then attaches the
+# yolo-cli binaries to it (RELEASING.md).
 on:
   workflow_dispatch:
     inputs:
@@ -73,6 +74,8 @@ jobs:
     runs-on: ubuntu-26.04-arm
     # crates.io trusts only this environment, which deploys from master alone.
     environment: crates-io
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     permissions:
       contents: write
       # crates.io trusted publishing
@@ -110,3 +113,13 @@ jobs:
           args=()
           [[ "$VERSION" != *-* ]] || args+=(--prerelease)
           gh release create "v$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${args[@]}"
+
+  cli:
+    needs: publish
+    uses: ./.github/workflows/cli.yml
+    with:
+      version: ${{ needs.publish.outputs.version }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write

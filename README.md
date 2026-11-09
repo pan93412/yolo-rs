@@ -79,6 +79,17 @@ let model = YoloModelSession::new_v8(session);
 
 - [**yolo-cli**](examples/yolo-cli): Command-line interface for running YOLO inference on images.
 
+### Try it without Rust
+
+Each [release](https://github.com/pan93412/yolo-rs/releases/latest) has yolo-cli built for Linux (x86_64 and arm64, with glibc 2.38 and GCC 14's libstdc++ or later, as on Ubuntu 24.04 or Debian 13) and macOS (Apple silicon, signed and notarized). They run on the CPU, and on macOS also with CoreML:
+
+```shell
+curl -L https://github.com/pan93412/yolo-rs/releases/latest/download/yolo-cli-aarch64-apple-darwin.tar.gz | tar -xz
+./yolo-cli-aarch64-apple-darwin/yolo-cli yolo11x.onnx photo.jpg -o detected.png
+```
+
+Replace `aarch64-apple-darwin` with `x86_64-unknown-linux-gnu` or `aarch64-unknown-linux-gnu` on Linux. `SHA256SUMS` lists each archive's checksum, and `gh attestation verify <archive> --repo pan93412/yolo-rs` checks that this repository's Release workflow built it.
+
 ## Acknowledgements
 
 This project is inspired by the [YOLOv8 example](https://github.com/pykeio/ort/tree/main/examples/yolov8) from the `ort` repository.
